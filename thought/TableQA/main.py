@@ -17,7 +17,9 @@ import subprocess
 import fire
 import os
 import sys
+import pickle
 sys.path.append('thought/TableQA')
+sys.path.append('.')
 
 from utils.load_data import load_wikitq_dataset
 from utils.llm import LLM
@@ -25,6 +27,7 @@ from utils.helper import *
 from utils.evaluate import *
 from utils.chain import *
 from operations import *
+from agents.clarifier_agent import ClarifierAgent, create_clarifier_result_path
 
 
 def main(
@@ -46,6 +49,25 @@ def main(
     )
 
     os.makedirs(thought_results_dir, exist_ok=True)
+
+    # Initialize ClarifierAgent and extract schema anchors
+    print("Initializing ClarifierAgent for schema anchoring...")
+    clarifier = ClarifierAgent(llm=gpt_llm)
+    dataset = clarifier.clarify_batch(dataset)
+    print(f"Clarified {len(dataset)} samples")
+
+    # Save clarifier results
+    clarifier_dir = os.path.join(thought_results_dir, "clarifier")
+    os.makedirs(clarifier_dir, exist_ok=True)
+
+    for sample in dataset:
+        sample_id = sample.get('id', 'unknown')
+        clarifier_path = os.path.join(clarifier_dir, f'case_dict_{sample_id}.pkl')
+        pickle.dump(
+            sample['clarifier'],
+            open(clarifier_path, "wb")
+        )
+    print(f"Saved clarifier results to {clarifier_dir}")
 
     proc_samples, _ = dynamic_chain_exec_with_cache_mp(
         dataset,
@@ -69,10 +91,17 @@ def main(
         ),
     ]
     final_result, _ = fixed_chain_exec_mp(gpt_llm, proc_samples, fixed_chain, n_proc=4, chunk_size=2)
-    
+
     pickle.dump(
         final_result, open(os.path.join(thought_results_dir, "final_result.pkl"), "wb")
     )
+
+    # Calculate and save accuracy
+    from utils.evaluate import wikitq_match_func_for_samples
+    acc = wikitq_match_func_for_samples(final_result)
+    print(f"Thought Stage Accuracy: {acc}")
+    with open(os.path.join(thought_results_dir, "acc.txt"), "w") as f:
+        f.write(f"Thought Stage Accuracy: {acc}\n")
 
 
 if __name__ == "__main__":

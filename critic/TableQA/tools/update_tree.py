@@ -174,7 +174,7 @@ def format_list_to_string(lst):
     result += ']'
     return result
 
-def vertical_expansion(few_shot, critic_template, error_type, parent_node, llm, llm_options):
+def vertical_expansion(few_shot, critic_template, error_type, parent_node, llm, llm_options, blueprint=None):
     prompt = ""
     prompt += vertical_expansion_few_shot
     prompt += "Now, determine whether the two lists below can be meaningfully split into two distinct subcategories.\n"
@@ -192,7 +192,7 @@ def vertical_expansion(few_shot, critic_template, error_type, parent_node, llm, 
     else:
         few_shot = few_shot.append(critic_template)
 
-def horizontal_expansion(few_shot_dict, critic_template, llm, llm_options):
+def horizontal_expansion(few_shot_dict, critic_template, llm, llm_options, blueprint=None):
     prompt = ""
     prompt += horizontal_expansion_few_shot
     prompt += "Now, given the error tree and the template, if the error path corresponding to the template cannot be found in the error tree, extend the error tree by adding a new branch at the appropriate location.\n"
@@ -269,7 +269,7 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
             for row in group_rows:
                 critic_template += " | ".join(row) + "\n"
             critic_template += "*/\n"
-    
+
     critic_template += f"{thought_log[-1]}\n\n"
 
     critic_template += "Prediction Answer: \n" + table_log[-1]["cotable_result"].lower() + "\n\n"
@@ -277,6 +277,15 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
     critic_template += "Critique:\n" + sample["critique"]  + "\n\n"
 
     critic_template += "Conclusion:\n" + sample["conclusion"]
+
+    # Generate blueprint from CuratorAgent if available
+    blueprint = sample.get('blueprint', '')
+    if not blueprint:
+        # Generate simple blueprint if not provided
+        blueprint = generate_simple_blueprint(sample)
+
+    # Get or initialize confidence score
+    confidence_score = sample.get('confidence_score', 1.0)
 
 
     with lock:
@@ -293,13 +302,35 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
                         parent_node = few_shot
                         few_shot = few_shot[error_type]
                         if isinstance(few_shot,list):
-                            vertical_expansion(few_shot, critic_template, error_type, parent_node, llm=llm, llm_options=llm_options)
+                            vertical_expansion(few_shot, critic_template, error_type, parent_node, llm=llm, llm_options=llm_options, blueprint=blueprint)
                             break
+                        elif isinstance(few_shot, dict):
+                            # Update blueprint and confidence_score for dict nodes
+                            few_shot['blueprint'] = few_shot.get('blueprint', blueprint)
+                            few_shot['confidence_score'] = few_shot.get('confidence_score', confidence_score)
             else:
-                horizontal_expansion(few_shot_dict, critic_template, llm, llm_options)
-            ## 如果不是扩充template，就横向或纵向扩充分支
-            
+                horizontal_expansion(few_shot_dict, critic_template, llm, llm_options, blueprint=blueprint)
+
             with open(error_tree_json, 'w') as f:
                 json.dump(few_shot_dict, f, indent=4)
         finally:
             pass
+
+
+def generate_simple_blueprint(sample):
+    """Generate a simple blueprint from sample when CuratorAgent is not available."""
+    conclusion = sample.get('conclusion', '')
+    critique = sample.get('critique', '')
+
+    if 'Step 1' in conclusion:
+        return "Error in initial row/column selection or filtering"
+    elif 'Step 2' in conclusion:
+        return "Error in intermediate data processing or transformation"
+    elif 'Step 3' in conclusion:
+        return "Error in final calculation or query generation"
+    elif 'row' in critique.lower():
+        return "Row selection error - model tends to omit or incorrectly select rows"
+    elif 'column' in critique.lower():
+        return "Column selection error - model filters wrong columns"
+    else:
+        return "General reasoning error in table manipulation"
