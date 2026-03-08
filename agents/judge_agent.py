@@ -23,9 +23,10 @@ initial reasoning and third-stage dispute resolution.
 import re
 from typing import Dict, List, Any, Optional, Tuple
 from thought.TableQA.utils.helper import table2string
+from .multi_agent_framework import BaseAgent, AgentType
 
 
-class JudgeAgent:
+class JudgeAgent(BaseAgent):
     """
     Judge Agent for final evaluation of table QA answers.
 
@@ -40,8 +41,21 @@ class JudgeAgent:
         Args:
             llm: Language model instance for evaluation
         """
-        self.llm = llm
+        super().__init__(agent_type=AgentType.JUDGE, llm=llm)
         self.judgment_history = []
+
+    def process(self, sample: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Process a sample using the judge_sample method.
+
+        Args:
+            sample: Input sample to process
+            context: Additional context (not used)
+
+        Returns:
+            Processed sample with judge information
+        """
+        return self.judge_sample(sample)
 
     def build_judge_prompt(
         self,

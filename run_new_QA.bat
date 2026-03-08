@@ -15,7 +15,7 @@ set MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
 
 REM Dataset Configuration
 set DATASET_PATH=thought/TableQA/data/wikitq/test_lower.jsonl
-set FIRST_N=3
+set FIRST_N=100
 
 REM Results Directory Configuration
 set MODEL_DIR=qwen2.5-72b-instruct

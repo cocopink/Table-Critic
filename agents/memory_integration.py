@@ -20,9 +20,9 @@ to provide a complete memory evolution system.
 """
 
 import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 from .curator_agent import CuratorAgent
-from ..memory.active_forgetting import ActiveForgettingManager, CaseRecord
+from .active_forgetting import ActiveForgettingManager, CaseRecord
 
 
 class MemoryEvolutionManager:

@@ -77,7 +77,7 @@ class LLM:
             results.append((text, np.log(fake_conf)))
 
         return results
-    
+
     def generate_plus_with_score_final_query(self, prompt, options=None, end_str=None):
         if options is None:
             options = self.get_model_options()

@@ -25,9 +25,10 @@ import json
 import random
 from typing import Dict, List, Any, Tuple
 from thought.TableQA.utils.helper import table2string
+from .multi_agent_framework import BaseAgent, AgentType
 
 
-class InitialReasoner:
+class InitialReasoner(BaseAgent):
     """
     Initial Reasoner for evaluating table QA answers.
 
@@ -42,7 +43,20 @@ class InitialReasoner:
         Args:
             llm: Language model instance for evaluation
         """
-        self.llm = llm
+        super().__init__(agent_type=AgentType.REASONER, llm=llm)
+
+    def process(self, sample: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Process a sample using the judge_sample method.
+
+        Args:
+            sample: Input sample to process
+            context: Additional context (not used)
+
+        Returns:
+            Processed sample with judge information
+        """
+        return self.judge_sample(sample)
 
     def build_judge_prompt(self, sample: Dict[str, Any], few_shot_examples: List[str] = None) -> str:
         """

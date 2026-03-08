@@ -26,9 +26,10 @@ import re
 import json
 from typing import Dict, List, Any, Tuple
 from collections import defaultdict
+from .multi_agent_framework import BaseAgent, AgentType
 
 
-class ClarifierAgent:
+class ClarifierAgent(BaseAgent):
     """
     Clarifier Agent for extracting schema anchors from tables.
 
@@ -44,7 +45,20 @@ class ClarifierAgent:
         Args:
             llm: Language model instance for advanced extraction (optional)
         """
-        self.llm = llm
+        super().__init__(agent_type=AgentType.CLARIFIER, llm=llm)
+
+    def process(self, sample: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Process a sample using the clarify_sample method.
+
+        Args:
+            sample: Input sample to process
+            context: Additional context (not used)
+
+        Returns:
+            Processed sample with clarification information
+        """
+        return self.clarify_sample(sample)
 
     def extract_headers(self, table_text: List[List[str]]) -> List[str]:
         """

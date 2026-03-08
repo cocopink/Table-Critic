@@ -17,7 +17,7 @@ from .multi_agent_framework import (
 )
 from .dispute_handler import DisputeHandler
 from .memory_integration import MemoryEvolutionManager
-
+from .active_forgetting import CaseRecord, ActiveForgettingManager
 __all__ = [
     'ClarifierAgent',
     'InitialReasoner',
