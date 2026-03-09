@@ -24,6 +24,10 @@ import re
 from typing import Dict, List, Any, Optional, Tuple
 from thought.TableQA.utils.helper import table2string
 from .multi_agent_framework import BaseAgent, AgentType
+from critic.TableQA.tools.instruction import judge_instruction
+from critic.TableQA.tools.get_info import get_judge_few_shot, get_cot_for_judge
+from critic.TableFV.tools.instruction import judge_instruction as judge_instruction_fv
+from critic.TableFV.tools.get_info import get_judge_few_shot as get_judge_few_shot_fv, get_cot_for_judge as get_cot_for_judge_fv
 
 
 class JudgeAgent(BaseAgent):
@@ -165,15 +169,17 @@ Instruction:
         self,
         sample: Dict[str, Any],
         llm_options: Dict[str, Any] = None,
-        include_third_stage_input: bool = False
+        include_third_stage_input: bool = False,
+        task_type: str = "TableQA"
     ) -> Dict[str, Any]:
         """
-        Judge a single sample.
+        Judge a single sample using the same prompt logic as judge_exec_one_sample().
 
         Args:
             sample: Sample dictionary
             llm_options: Options for LLM generation
             include_third_stage_input: Whether to include third-stage (dispute) input
+            task_type: Task type ("TableQA" or "TableFV") to select correct few-shot examples
 
         Returns:
             Sample with added judge field containing conclusion
@@ -185,29 +191,62 @@ Instruction:
                 per_example_top_p=1.0
             )
 
-        # Build prompt with optional third-stage context
-        prompt = self.build_judge_prompt(
-            sample,
-            include_validator_feedback=include_third_stage_input,
-            include_dispute_context=include_third_stage_input
-        )
+        # Select the correct instruction and functions based on task type
+        # This ensures consistency with the traditional method for both FV and QA tasks
+        if task_type == "TableFV":
+            # For Table Fact Verification task
+            prompt = ""
+            prompt += judge_instruction_fv
+            
+            # Add few-shot examples for TableFV
+            few_shot = get_judge_few_shot_fv(few_shot_json="critic/TableFV/tools/few_shot_judge.json")
+            prompt += few_shot
+            
+            # Add chain of thought context for TableFV
+            cot = get_cot_for_judge_fv(sample)
+            prompt += cot
+        else:
+            # For Table Question Answering task (default)
+            prompt = ""
+            prompt += judge_instruction
+            
+            # Add few-shot examples for TableQA
+            few_shot = get_judge_few_shot(few_shot_json="critic/TableQA/tools/few_shot_judge.json")
+            prompt += few_shot
+            
+            # Add chain of thought context for TableQA
+            cot = get_cot_for_judge(sample)
+            prompt += cot
 
-        response = self.llm.generate(prompt, options=llm_options)
+        # Generate response using generate_plus_with_score (same as judge_exec_one_sample)
+        responses = self.llm.generate_plus_with_score(prompt, options=llm_options)
+        
+        # Extract judge and judge_thought from response (same as judge_exec_one_sample)
+        judge_thought = responses[0][0].split("Conclusion:")[0].strip() if "Conclusion:" in responses[0][0] else responses[0][0].strip() + "\n"
+        judge = responses[0][0].split("Conclusion:")[1].strip() if "Conclusion:" in responses[0][0] else responses[0][0].strip() + "\n"
 
-        # Extract conclusion from response
-        conclusion = self._extract_conclusion(response)
-        explanation = self._extract_explanation(response)
+        # Add judge information to sample (same as judge_exec_one_sample)
+        if "judge_cotable_list" not in sample:
+            sample["judge_cotable_list"] = []
+        if "judge_thought_list" not in sample:
+            sample["judge_thought_list"] = []
+        if "judge_list" not in sample:
+            sample["judge_list"] = []
 
-        # Add judge information to sample
-        sample['judge'] = conclusion
-        sample['judge_explanation'] = explanation
-        sample['judge_response'] = response
+        sample["judge_cotable_list"].append(cot)
+        sample["judge_thought_list"].append(judge_thought)
+        sample["judge_list"].append(judge)
+
+        sample['judge'] = judge
+        sample['judge_thought'] = judge_thought
+        sample['judge_response'] = responses[0][0]
 
         # Track judgment history
         self.judgment_history.append({
             'sample_id': sample.get('id', 'unknown'),
-            'conclusion': conclusion,
-            'third_stage_input': include_third_stage_input
+            'conclusion': judge,
+            'third_stage_input': include_third_stage_input,
+            'task_type': task_type
         })
 
         return sample

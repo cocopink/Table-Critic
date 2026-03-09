@@ -11,21 +11,37 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# ========================================
+# Ollama 运行参数配置说明
+# ========================================
+# 以下参数可以通过环境变量或命令行参数设置：
+#   OLLAMA_NUM_PARALLEL:    并行请求数（默认: 2）
+#   OLLAMA_CONTEXT_LENGTH:  上下文长度（默认: 65536）
+#
+# 使用方式：
+#   1. 环境变量: export OLLAMA_NUM_PARALLEL=2
+#   2. 命令行参数: --num_parallel 2
+# ========================================
+
 # Ollama 配置
 OLLAMA_HOST="http://localhost:11434"
 OLLAMA_API_BASE="${OLLAMA_HOST}/v1"
 OLLAMA_API_KEY="ollama"
 
+# Ollama 运行参数配置（可通过环境变量或参数修改）
+OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-2}
+OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-65536}
+
 # 默认模型（可通过参数修改）
-DEFAULT_MODEL="qwen3:14b"
+DEFAULT_MODEL="qwen3:32b"
 
 # 数据处理参数
 FIRST_N=-1
-N_PROC=1
-CHUNK_SIZE=1
+N_PROC=8
+CHUNK_SIZE=4
 
 # 任务类型（FV 或 QA）
-TASK_TYPE=""
+TASK_TYPE="QA"
 
 # 结果目录配置（不包含模型名，将在运行时动态添加）
 BASE_THOUGHT_RESULTS_FV='results/thought/tabfact'
@@ -51,11 +67,14 @@ print_help() {
     echo "  -n, --first_n NUM    处理前 N 个样本 (默认: -1, 表示全部)"
     echo "  -p, --n_proc NUM     进程数 (默认: 1)"
     echo "  -c, --chunk_size NUM 批次大小 (默认: 1)"
+    echo "  --num_parallel NUM   Ollama 并行请求数 (默认: ${OLLAMA_NUM_PARALLEL})"
+    echo "  --context_length NUM Ollama 上下文长度 (默认: ${OLLAMA_CONTEXT_LENGTH})"
     echo "  -h, --help           显示此帮助信息"
     echo ""
     echo "示例:"
     echo "  $0 -t FV -m qwen2.5:14b"
     echo "  $0 -t QA -m llama3.1:8b"
+    echo "  $0 -t QA -m qwen3:32b --num_parallel 2 --context_length 65536"
     echo ""
     echo "常用 Ollama 模型:"
     echo "  - qwen2.5:14b"
@@ -321,6 +340,14 @@ while [[ $# -gt 0 ]]; do
             CHUNK_SIZE="$2"
             shift 2
             ;;
+        --num_parallel)
+            OLLAMA_NUM_PARALLEL="$2"
+            shift 2
+            ;;
+        --context_length)
+            OLLAMA_CONTEXT_LENGTH="$2"
+            shift 2
+            ;;
         -h|--help)
             print_help
             exit 0
@@ -364,6 +391,8 @@ echo "模型: ${MODEL}"
 echo "处理样本数: ${FIRST_N}"
 echo "进程数: ${N_PROC}"
 echo "批次大小: ${CHUNK_SIZE}"
+echo "Ollama 并行数: ${OLLAMA_NUM_PARALLEL}"
+echo "Ollama 上下文长度: ${OLLAMA_CONTEXT_LENGTH}"
 echo "=========================================="
 echo ""
 

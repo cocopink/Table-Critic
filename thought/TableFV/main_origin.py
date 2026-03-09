@@ -18,16 +18,13 @@ import fire
 import os
 import sys
 sys.path.append('thought/TableFV')
-sys.path.append('critic/TableFV')
-sys.path.append('.')
+
 from utils.load_data import load_tabfact_dataset
 from utils.llm import LLM
 from utils.helper import *
 from utils.evaluate import *
 from utils.chain import *
 from operations import *
-from tools.read_pkl import read_pkl
-from agents.clarifier_agent import ClarifierAgent, create_clarifier_result_path
 
 
 def main(
@@ -50,26 +47,6 @@ def main(
     )
 
     os.makedirs(thought_results_dir, exist_ok=True)
-    
-    # Initialize ClarifierAgent and extract schema anchors
-    print("Initializing ClarifierAgent for schema anchoring...")
-    clarifier = ClarifierAgent(llm=gpt_llm)
-    dataset = clarifier.clarify_batch(dataset)
-    print(f"Clarified {len(dataset)} samples")
-
-    # Save clarifier results
-    clarifier_dir = os.path.join(thought_results_dir, "clarifier")
-    os.makedirs(clarifier_dir, exist_ok=True)
-
-    for sample in dataset:
-        sample_id = sample.get('id', 'unknown')
-        clarifier_path = os.path.join(clarifier_dir, f'case_dict_{sample_id}.pkl')
-        pickle.dump(
-            sample['clarifier'],
-            open(clarifier_path, "wb")
-        )
-    print(f"Saved clarifier results to {clarifier_dir}")
-
 
     proc_samples, _ = dynamic_chain_exec_with_cache_mp(
         dataset,
@@ -92,22 +69,11 @@ def main(
             ),
         ),
     ]
+    final_result, _ = fixed_chain_exec_mp(gpt_llm, proc_samples, fixed_chain, n_proc=4, chunk_size=2)
 
-    final_path = os.path.join(thought_results_dir, "final_result.pkl")
-    if os.path.exists(final_path):
-        final_result = read_pkl(final_path)
-    else:
-        final_result, _ = fixed_chain_exec_mp(gpt_llm, proc_samples, fixed_chain, n_proc=4, chunk_size=2)
-
-        pickle.dump(
-            final_result, open(os.path.join(thought_results_dir, "final_result.pkl"), "wb")
-        )
-        
-    from utils.evaluate import tabfact_match_func_for_samples
-    acc = tabfact_match_func_for_samples(final_result)
-    print(f"Thought Stage Accuracy: {acc}")
-    with open(os.path.join(thought_results_dir, "acc.txt"), "w") as f:
-        f.write(f"Thought Stage Accuracy: {acc}\n")
+    pickle.dump(
+        final_result, open(os.path.join(thought_results_dir, "final_result.pkl"), "wb")
+    )
 
 
 if __name__ == "__main__":

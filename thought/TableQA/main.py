@@ -20,13 +20,14 @@ import sys
 import pickle
 sys.path.append('thought/TableQA')
 sys.path.append('.')
-
+sys.path.append('critic/TableQA')
 from utils.load_data import load_wikitq_dataset
 from utils.llm import LLM
 from utils.helper import *
 from utils.evaluate import *
 from utils.chain import *
 from operations import *
+from tools.read_pkl import read_pkl
 from agents.clarifier_agent import ClarifierAgent, create_clarifier_result_path
 
 
@@ -90,11 +91,17 @@ def main(
             ),
         ),
     ]
-    final_result, _ = fixed_chain_exec_mp(gpt_llm, proc_samples, fixed_chain, n_proc=4, chunk_size=2)
+    
+    final_path = os.path.join(thought_results_dir, "final_result.pkl")
+    if os.path.exists(final_path):
+        final_result = read_pkl(final_path)
+    else:
+        final_result, _ = fixed_chain_exec_mp(gpt_llm, proc_samples, fixed_chain, n_proc=4, chunk_size=2)
 
-    pickle.dump(
-        final_result, open(os.path.join(thought_results_dir, "final_result.pkl"), "wb")
-    )
+        pickle.dump(
+            final_result, open(os.path.join(thought_results_dir, "final_result.pkl"), "wb")
+        )
+
 
     # Calculate and save accuracy
     from utils.evaluate import wikitq_match_func_for_samples
@@ -106,3 +113,4 @@ def main(
 
 if __name__ == "__main__":
     fire.Fire(main)
+64000

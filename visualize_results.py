@@ -311,9 +311,9 @@ def main():
     
     # 分析每个阶段（显示前2个样本）
     stages = [
-        ('Thought', 'results/thought/tabfact/cache'),
-        ('Critic', 'results/critic/tabfact/cache'),
-        ('Refine', 'results/refine/tabfact/cache')
+        ('Thought', 'results/thought/tabfact/qwen3:32b/cache'),
+        ('Critic', 'results/critic/tabfact/qwen3:32b/cache'),
+        ('Refine', 'results/refine/tabfact/qwen3:32b/cache')
     ]
     
     for stage_name, directory in stages:

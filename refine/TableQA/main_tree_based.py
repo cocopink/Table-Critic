@@ -86,7 +86,7 @@ def main(
             original_chain = copy.deepcopy(sample.get('chain', []))
 
             # Check if already correct
-            judge_sample = judge.judge_sample(sample)
+            judge_sample = judge.judge_sample(sample, task_type="TableQA")
             if judge_sample.get('judge') == '[Correct]':
                 refined_samples.append(judge_sample)
                 continue
