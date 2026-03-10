@@ -4,7 +4,7 @@ import multiprocessing as mp
 import os
 import pickle
 from tqdm import tqdm
-from .get_info import get_cot_for_critic, get_cot_for_judge, get_cot_for_tree, get_critic_few_shot, get_judge_few_shot, get_tree_few_shot
+from .get_info import get_cot_for_critic, get_cot_for_judge, get_cot_for_tree, get_critic_few_shot, get_critic_blueprint, get_judge_few_shot, get_tree_few_shot
 from .instruction import critic_instruction, tree_instruction, judge_instruction
 
 
@@ -62,13 +62,18 @@ def critic_exec_one_sample(
     sample,
     error_route,
     llm,
-    llm_options=None
+    llm_options=None,
+    blueprint_only=False
 ):
     critic_sample = copy.deepcopy(sample)
     prompt = ""
     prompt += critic_instruction
 
-    few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableFV/tools/few_shot_critic.json")
+    # Use blueprint mode if requested (first round)
+    if blueprint_only:
+        few_shot = get_critic_blueprint(error_route, few_shot_json="critic/TableFV/tools/few_shot_critic.json")
+    else:
+        few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableFV/tools/few_shot_critic.json")
     prompt += few_shot
 
     cot, max_step = get_cot_for_critic(critic_sample)

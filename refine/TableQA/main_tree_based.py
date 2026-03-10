@@ -34,7 +34,7 @@ def main(
     first_n=-1,
     n_proc=10,
     chunk_size=5,
-    use_multi_agent: bool = True,
+    use_multi_agent: bool = False,
 ):
 
     result_pkl = os.path.join(thought_results_dir, "final_result.pkl")

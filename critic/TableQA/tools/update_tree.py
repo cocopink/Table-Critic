@@ -174,31 +174,31 @@ def format_list_to_string(lst):
     result += ']'
     return result
 
-def vertical_expansion(few_shot, critic_template, error_type, parent_node, llm, llm_options, blueprint=None):
+def vertical_expansion(few_shot, template_dict, error_type, parent_node, llm, llm_options):
     prompt = ""
     prompt += vertical_expansion_few_shot
     prompt += "Now, determine whether the two lists below can be meaningfully split into two distinct subcategories.\n"
     prompt += f"Parent Category: {error_type}\n\n"
     prompt += f"List 1: {format_list_to_string(random.sample(few_shot, min(5, len(few_shot))))}\n"
-    prompt += f"List 2: {format_list_to_string([critic_template])}\n\n"
+    prompt += f"List 2: {format_list_to_string([template_dict['content']])}\n\n"
     prompt += "Explanation:\n"
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
     names = re.findall(r'<(.*?)>', responses[0][0])
     if len(names) == 2 and names[0] != names[1]:
         parent_node[error_type] = {
             names[0]:few_shot,
-            names[1]:[critic_template]
+            names[1]:[template_dict]
         }
     else:
-        few_shot = few_shot.append(critic_template)
+        few_shot = few_shot.append(template_dict)
 
-def horizontal_expansion(few_shot_dict, critic_template, llm, llm_options, blueprint=None):
+def horizontal_expansion(few_shot_dict, template_dict, llm, llm_options):
     prompt = ""
     prompt += horizontal_expansion_few_shot
     prompt += "Now, given the error tree and the template, if the error path corresponding to the template cannot be found in the error tree, extend the error tree by adding a new branch at the appropriate location.\n"
     modified_error_tree = replace_leaves_with_end(few_shot_dict)
     prompt += f"Error Tree:\n{modified_error_tree}\n\n"
-    prompt += f"Template:\n{critic_template}\n\n"
+    prompt += f"Template:\n{template_dict['content']}\n\n"
     prompt += "Explanation:\n"
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
     if "Addition" in responses[0][0]:
@@ -213,7 +213,7 @@ def horizontal_expansion(few_shot_dict, critic_template, llm, llm_options, bluep
                 if error_type in few_shot:
                     few_shot = few_shot[error_type]
                 elif error_type != '<END>' and isinstance(few_shot, dict):
-                    few_shot[error_type] = [critic_template]
+                    few_shot[error_type] = [template_dict]
                     break
                 else:
                     break
@@ -278,15 +278,29 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
 
     critic_template += "Conclusion:\n" + sample["conclusion"]
 
-    # Generate blueprint from CuratorAgent if available
-    blueprint = sample.get('blueprint', '')
-    if not blueprint:
-        # Generate simple blueprint if not provided
-        blueprint = generate_simple_blueprint(sample)
+    # 生成蓝图：使用LLM生成一句话的错误摘要
+    blueprint_prompt = """You are given a critique of a table reasoning error. Your task is to summarize the error in one concise sentence (blueprint) that captures the essence of what went wrong.
+
+Critique:
+{critique}
+
+Provide only the blueprint sentence, nothing else."""
+
+    blueprint_response = llm.generate_plus_with_score(
+        blueprint_prompt.format(critique=sample["critique"]),
+        # options=llm.get_model_options(temperature=0, max_decode_steps=50)
+        options=llm.get_model_options(temperature=0, per_example_max_decode_steps=50)
+    )
+    blueprint = blueprint_response[0][0].strip()
 
     # Get or initialize confidence score
     confidence_score = sample.get('confidence_score', 1.0)
 
+    # 将模板保存为字典格式，包含blueprint和content
+    template_dict = {
+        "blueprint": blueprint,
+        "content": critic_template
+    }
 
     with lock:
         try:
@@ -302,35 +316,12 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
                         parent_node = few_shot
                         few_shot = few_shot[error_type]
                         if isinstance(few_shot,list):
-                            vertical_expansion(few_shot, critic_template, error_type, parent_node, llm=llm, llm_options=llm_options, blueprint=blueprint)
+                            vertical_expansion(few_shot, template_dict, error_type, parent_node, llm=llm, llm_options=llm_options)
                             break
-                        elif isinstance(few_shot, dict):
-                            # Update blueprint and confidence_score for dict nodes
-                            few_shot['blueprint'] = few_shot.get('blueprint', blueprint)
-                            few_shot['confidence_score'] = few_shot.get('confidence_score', confidence_score)
             else:
-                horizontal_expansion(few_shot_dict, critic_template, llm, llm_options, blueprint=blueprint)
+                horizontal_expansion(few_shot_dict, template_dict, llm, llm_options)
 
             with open(error_tree_json, 'w') as f:
                 json.dump(few_shot_dict, f, indent=4)
         finally:
             pass
-
-
-def generate_simple_blueprint(sample):
-    """Generate a simple blueprint from sample when CuratorAgent is not available."""
-    conclusion = sample.get('conclusion', '')
-    critique = sample.get('critique', '')
-
-    if 'Step 1' in conclusion:
-        return "Error in initial row/column selection or filtering"
-    elif 'Step 2' in conclusion:
-        return "Error in intermediate data processing or transformation"
-    elif 'Step 3' in conclusion:
-        return "Error in final calculation or query generation"
-    elif 'row' in critique.lower():
-        return "Row selection error - model tends to omit or incorrectly select rows"
-    elif 'column' in critique.lower():
-        return "Column selection error - model filters wrong columns"
-    else:
-        return "General reasoning error in table manipulation"

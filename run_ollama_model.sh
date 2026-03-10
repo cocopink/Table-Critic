@@ -29,25 +29,29 @@ OLLAMA_API_BASE="${OLLAMA_HOST}/v1"
 OLLAMA_API_KEY="ollama"
 
 # Ollama 运行参数配置（可通过环境变量或参数修改）
-OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-2}
-OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-65536}
+OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
+OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-4096}
 
 # 默认模型（可通过参数修改）
 DEFAULT_MODEL="qwen3:32b"
 
 # 数据处理参数
 FIRST_N=-1
-N_PROC=8
-CHUNK_SIZE=4
+N_PROC=1
+CHUNK_SIZE=1
 
 # 任务类型（FV 或 QA）
 TASK_TYPE="QA"
 
 # 结果目录配置（不包含模型名，将在运行时动态添加）
-BASE_THOUGHT_RESULTS_FV='results/thought/tabfact'
-BASE_REFINE_RESULTS_FV='results/refine/tabfact'
-BASE_THOUGHT_RESULTS_QA='results/thought/wikitq'
-BASE_REFINE_RESULTS_QA='results/refine/wikitq'
+# BASE_THOUGHT_RESULTS_FV='results/thought_100/tabfact'
+# BASE_REFINE_RESULTS_FV='results/refine_100/tabfact'
+# BASE_THOUGHT_RESULTS_QA='results/thought_100/wikitq'
+# BASE_REFINE_RESULTS_QA='results/refine_100/wikitq'
+BASE_THOUGHT_RESULTS_FV='results/thought_100/tabfact'
+BASE_REFINE_RESULTS_FV='results/refine_100/tabfact'
+BASE_THOUGHT_RESULTS_QA='results/thought_100/wikitq'
+BASE_REFINE_RESULTS_QA='results/refine_100/wikitq'
 
 # ========================================
 # 函数定义
@@ -100,7 +104,7 @@ check_ollama_installed() {
 # 检查 ollama 服务是否运行
 check_ollama_running() {
     if curl -s "${OLLAMA_HOST}/api/tags" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ Ollama 服务正在运行${NC}"
+        echo -e "${GREEN}✓ Ollama 服务正在运行${NC}参数未更改"
         return 0
     else
         echo -e "${YELLOW}⚠ Ollama 服务未运行${NC}"
@@ -111,6 +115,8 @@ check_ollama_running() {
 # 启动 ollama 服务
 start_ollama() {
     echo "正在启动 Ollama 服务..."
+    export OLLAMA_NUM_PARALLEL="$OLLAMA_NUM_PARALLEL"
+    export OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH"
     ollama serve > /dev/null 2>&1 &
     OLLAMA_PID=$!
     
@@ -226,8 +232,9 @@ run_table_fv() {
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
-        --chunk_size $CHUNK_SIZE
-    
+        --chunk_size $CHUNK_SIZE \
+        --use_multi_agent $USE_MULTI_AGENT
+
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: refine/TableFV/main_tree_based.py 执行失败${NC}"
         exit 1
@@ -296,7 +303,8 @@ run_table_qa() {
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
-        --chunk_size $CHUNK_SIZE
+        --chunk_size $CHUNK_SIZE \
+        --use_multi_agent $USE_MULTI_AGENT
     
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: refine/TableQA/main_tree_based.py 执行失败${NC}"
@@ -338,6 +346,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -c|--chunk_size)
             CHUNK_SIZE="$2"
+            shift 2
+            ;;
+        -u | --use_multi_size)
+            USE_MULTI_AGENT="$2"
             shift 2
             ;;
         --num_parallel)

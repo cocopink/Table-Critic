@@ -26,6 +26,7 @@ import copy
 from typing import Dict, List, Any, Optional, Tuple
 from enum import Enum
 from dataclasses import dataclass, field
+from critic.TableQA.tools.update_tree import update_error_tree
 
 
 class DisputeRound(Enum):

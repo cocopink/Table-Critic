@@ -968,14 +968,18 @@ def _judge_critic_refine_with_cache_mp_core(arg):
                 proc_sample = judge_sample
             else:
                 loop_count = 0
-                while(loop_count < 5):
+                while(loop_count < 2):
                     tree_sample = tree_exec_one_sample(judge_sample, llm=llm, llm_options=llm_options)
                     routes = re.findall(r'\((.*?)\)', tree_sample['tree'])
                     if routes:
                         error_route = routes[0]
                     else:
                         error_route = "random"
-                    critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options)
+                    # 第一轮使用蓝图模式，只提供错误摘要
+                    if loop_count == 0:
+                        critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=True)
+                    else:
+                        critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=False)
                     incorrect_step, max_step = return_incorrect_max_step(critic_sample)
                     if incorrect_step:
                         if incorrect_step != max_step:      # Error occurred while dynamically generating table

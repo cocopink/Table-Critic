@@ -248,7 +248,11 @@ Instruction:
             if examples:
                 few_shot_text = "\nHere are some examples.\n\n"
                 for idx, example in enumerate(examples):
-                    few_shot_text += f"Example {idx+1}:\n{example}\n\n\n"
+                    # Handle both dict format (with blueprint/content) and string format
+                    if isinstance(example, dict) and 'content' in example:
+                        few_shot_text += f"Example {idx+1}:\n{example['content']}\n\n\n"
+                    else:
+                        few_shot_text += f"Example {idx+1}:\n{example}\n\n\n"
                 return few_shot_text
 
             return ""

@@ -173,31 +173,31 @@ def format_list_to_string(lst):
     result += ']'
     return result
 
-def vertical_expansion(few_shot, critic_template, error_type, parent_node, llm, llm_options):
+def vertical_expansion(few_shot, template_dict, error_type, parent_node, llm, llm_options):
     prompt = ""
     prompt += vertical_expansion_few_shot
     prompt += "Now, determine whether the two lists below can be meaningfully split into two distinct subcategories.\n"
     prompt += f"Parent Category: {error_type}\n\n"
     prompt += f"List 1: {format_list_to_string(random.sample(few_shot, min(5, len(few_shot))))}\n"
-    prompt += f"List 2: {format_list_to_string([critic_template])}\n\n"
+    prompt += f"List 2: {format_list_to_string([template_dict['content']])}\n\n"
     prompt += "Explanation:\n"
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
     names = re.findall(r'<(.*?)>', responses[0][0])
     if len(names) == 2 and names[0] != names[1]:
         parent_node[error_type] = {
             names[0]:few_shot,
-            names[1]:[critic_template]
+            names[1]:[template_dict]
         }
     else:
-        few_shot = few_shot.append(critic_template)
+        few_shot = few_shot.append(template_dict)
 
-def horizontal_expansion(few_shot_dict, critic_template, llm, llm_options):
+def horizontal_expansion(few_shot_dict, template_dict, llm, llm_options):
     prompt = ""
     prompt += horizontal_expansion_few_shot
     prompt += "Now, given the error tree and the template, if the error path corresponding to the template cannot be found in the error tree, extend the error tree by adding a new branch at the appropriate location.\n"
     modified_error_tree = replace_leaves_with_end(few_shot_dict)
     prompt += f"Error Tree:\n{modified_error_tree}\n\n"
-    prompt += f"Template:\n{critic_template}\n\n"
+    prompt += f"Template:\n{template_dict['content']}\n\n"
     prompt += "Explanation:\n"
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
     if "Addition" in responses[0][0]:
@@ -212,7 +212,7 @@ def horizontal_expansion(few_shot_dict, critic_template, llm, llm_options):
                 if error_type in few_shot:
                     few_shot = few_shot[error_type]
                 elif error_type != '<END>' and isinstance(few_shot, dict):
-                    few_shot[error_type] = [critic_template]
+                    few_shot[error_type] = [template_dict]
                     break
                 else:
                     break
@@ -277,6 +277,26 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
 
     critic_template += "Conclusion:\n" + sample["conclusion"]
 
+    # 生成蓝图：使用LLM生成一句话的错误摘要
+    blueprint_prompt = """You are given a critique of a table reasoning error. Your task is to summarize the error in one concise sentence (blueprint) that captures the essence of what went wrong.
+
+Critique:
+{critique}
+
+Provide only the blueprint sentence, nothing else."""
+
+    blueprint_response = llm.generate_plus_with_score(
+        blueprint_prompt.format(critique=sample["critique"]),
+        options=llm.get_model_options(temperature=0, max_decode_steps=50)
+    )
+    blueprint = blueprint_response[0][0].strip()
+
+    # 将模板保存为字典格式，包含blueprint和content
+    template_dict = {
+        "blueprint": blueprint,
+        "content": critic_template
+    }
+
 
     with lock:
         try:
@@ -292,10 +312,10 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
                         parent_node = few_shot
                         few_shot = few_shot[error_type]
                         if isinstance(few_shot,list):
-                            vertical_expansion(few_shot, critic_template, error_type, parent_node, llm=llm, llm_options=llm_options)
+                            vertical_expansion(few_shot, template_dict, error_type, parent_node, llm=llm, llm_options=llm_options)
                             break
             else:
-                horizontal_expansion(few_shot_dict, critic_template, llm, llm_options)
+                horizontal_expansion(few_shot_dict, template_dict, llm, llm_options)
             ## 如果不是扩充template，就横向或纵向扩充分支
             
             with open(error_tree_json, 'w') as f:

@@ -251,6 +251,31 @@ def get_critic_few_shot(error_route, few_shot_json= "critic_few_shot.json"):
 
     return few_shot
 
+
+def get_critic_blueprint(error_route, few_shot_json="critic_few_shot.json"):
+    """
+    Get blueprint descriptions from few-shot samples.
+    If a sample has a 'blueprint' field, extract it.
+    Otherwise, extract the full content as fallback.
+    """
+    blueprint_text = "\nHere are some error blueprints.\n\n"
+
+    with open(few_shot_json, 'r') as f:
+        few_shot_dict = json.load(f)
+        selected_few_shot = return_error_shot(error_route, few_shot_dict)
+
+    random.shuffle(selected_few_shot)
+
+    for idx, shot in enumerate(selected_few_shot):
+        # Check if shot is a dict with blueprint field
+        if isinstance(shot, dict) and 'blueprint' in shot:
+            blueprint_text += f"Example {idx+1}:\nBlueprint: {shot['blueprint']}\n\n\n"
+        else:
+            # Fallback: use the full shot content if blueprint not available
+            blueprint_text += f"Example {idx+1}:\n{shot}\n\n\n"
+
+    return blueprint_text
+
 def get_tree_few_shot(few_shot_json= "few_shot_tree.json"):
     few_shot = "\nHere are some examples.\n\n"
 
