@@ -24,12 +24,11 @@
 
 ## 第二阶段：诊断与路由（Diagnosis & Routing）
 
-### 2.1 创建 Initial Reasoner
-- [ ] 这部分实现参照Judge的原实现
-- [ ] 判断回答是否正确（Correct/Incorrect）
-- [ ] 参照 Table-Critic 的 prompt 实现,
 
 ### 2.2 修改 Judge Agent逻辑
+- [ ] 这部分实现参照Judge的原实现
+- [ ] 判断回答是否正确（Correct/Incorrect）
+- [ ] 参照 Table-Critic 的相关 prompt 实现。
 - [ ] 实现 Judge 作为总判官，在原始基础上，可能还要接受第三阶段的判断，但是回答格式不发生变化
 
 
@@ -44,14 +43,16 @@
 
 ### 3.2 创建 Critic Agent（导师）
 - [ ] 参考原Critic模块进行修改
+- [ ] 参照 Table-Critic 的相关 prompt 实现。
 - [ ] 基于记忆库检索 Blueprint 下达纠偏指令
 - [ ] 实现 Prompt 策略：
   - [ ] 第一次：只引入 Blueprint
   - [ ] 第二次：引入原文作为少样本学习（现有代码的格式）
 
 ### 3.3 创建 Refiner Agent（执行者）
+- [ ] 参考原Refiner模块进行修改(将原本的Critic拆分为新的Critic+Refiner，分别保留原Critic的错误识别和重试环节)
+- [ ] 参照 Table-Critic 的相关 prompt 实现。
 - [ ] **新增文件**: `agents/refiner_agent.py`
-- [ ] 根据 Critic 指令重构推理路径
 - [ ] 实现推理路径修正逻辑
 
 ### 3.4 创建 Validator Agent（审计员）
@@ -63,15 +64,15 @@
 ### 3.5 实现三次分歧处理机制
 - [ ] **新增文件**: `agents/dispute_handler.py`
 - [ ] 实现第一次分歧：Critic 带 Validator 建议重试
-- [ ] 实现第二次分歧：加入少样本案例学习
-- [ ] 实现第三次分歧：触发质疑操作，交 Judge 最终裁决
-- [ ] 实现"无法修正"标记机制
+- [ ] 实现第二次分歧：加入少样本案例学习(和原始的流程一致，原始流程在这个地方重复尝试不大于5次)
+- [ ] 实现第三次分歧：触发Refiner质疑操作，交 Judge 最终裁决
+- [ ] 实现"无法修正"标记机制,即直接将错误结果作为最终结论。
 
 ### 3.6 修改修正阶段保存逻辑
 - [ ] **修改文件**: `refine/TableQA/main.py`
 - [ ] 保存第一次错误的思维链 + 最终正确的思维链
 - [ ] 保存到：`data/results/{model}/refiner/cache/xx.pkl`
-- [ ] 保存方式尽可能和原有代码的逻辑保持一致
+- [ ] 保存方式需要和原有代码的逻辑保持一致
 
 ---
 
@@ -140,11 +141,11 @@
 
 ## 注意事项
 
-1. **所有修改都基于 Table-Critic 现有代码**，不要随意创建新的实现
+1. **所有修改都基于 Table-Critic 现有代码**，如果可复用即复用，不要随意创建新的实现
 2. **保存路径必须严格按照 README 要求**：`data/results/{model}/thought/` 和 `data/results/{model}/refiner/`
 3. **每个阶段完成后都要计算准确率**并保存到 `acc.txt`
 4. **三次分歧处理机制**是核心创新点，需要仔细实现
 5. **主动遗忘机制**是记忆进化的关键，需要设计合理的权重更新策略
 6. **Blueprint 的生成**是连接第三、四阶段的关键，需要保证质量
-7. ~~完成后创建一个run_new_QA和run_new_FV.sh~~ ✅ 已完成
-8. 使用siliconflow的Qwen/Qwen2.5-72B-Instruct，api key放置在siliconflow.txt文件中
+7. 完成后创建使用脚本，run_0312_arch.sh,要求类似run_ollama_model.sh或run_FV.sh、run_QA.sh
+8. 使用siliconflow的Qwen/Qwen3-32B，api key放置在siliconflow.txt文件中
