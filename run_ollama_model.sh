@@ -48,10 +48,10 @@ TASK_TYPE="QA"
 # BASE_REFINE_RESULTS_FV='results/refine_100/tabfact'
 # BASE_THOUGHT_RESULTS_QA='results/thought_100/wikitq'
 # BASE_REFINE_RESULTS_QA='results/refine_100/wikitq'
-BASE_THOUGHT_RESULTS_FV='results/thought_100/tabfact'
-BASE_REFINE_RESULTS_FV='results/refine_100/tabfact'
-BASE_THOUGHT_RESULTS_QA='results/thought_100/wikitq'
-BASE_REFINE_RESULTS_QA='results/refine_100/wikitq'
+BASE_THOUGHT_RESULTS_FV='results/thought/tabfact'
+BASE_REFINE_RESULTS_FV='results/refine/tabfact'
+BASE_THOUGHT_RESULTS_QA='results/thought/wikitq'
+BASE_REFINE_RESULTS_QA='results/refine/wikitq'
 
 # ========================================
 # 函数定义

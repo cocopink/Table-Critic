@@ -287,7 +287,8 @@ Provide only the blueprint sentence, nothing else."""
 
     blueprint_response = llm.generate_plus_with_score(
         blueprint_prompt.format(critique=sample["critique"]),
-        options=llm.get_model_options(temperature=0, max_decode_steps=50)
+        # options=llm.get_model_options(temperature=0, max_decode_steps=50)
+        options=llm.get_model_options(temperature=0, per_example_max_decode_steps=50)
     )
     blueprint = blueprint_response[0][0].strip()
 
