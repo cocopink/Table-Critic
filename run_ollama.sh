@@ -20,7 +20,7 @@ OLLAMA_API_KEY="ollama"
 DEFAULT_MODEL="qwen3:14b"
 
 # 数据处理参数
-FIRST_N=-1
+FIRST_N=10
 N_PROC=1
 CHUNK_SIZE=1
 

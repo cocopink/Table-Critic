@@ -4,3 +4,5 @@ venv_shared_deepsearcher/
 *.log
 __pycache__/
 siliconflow.txt
+.idea/
+.claude/

@@ -15,7 +15,7 @@ MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
 # Dataset Configuration
 DATASET_PATH="thought/TableQA/data/wikitq/test_lower.jsonl"
 #FIRST_N=${FIRST_N:--1}  # -1 means all samples, can be overridden via environment variable
-FIRST_N=3
+FIRST_N=10
 
 # Results Directory Configuration
 MODEL_DIR="qwen2.5-72b-instruct"

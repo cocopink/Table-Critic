@@ -905,10 +905,10 @@ for idx, sample in enumerate(all_samples):
 # 读取 API key
 API_KEY=$(cat siliconflow.txt)
 BASE_URL="https://api.siliconflow.cn/v1"
-MODEL="Qwen/Qwen3-32B"
+MODEL="Qwen/Qwen3.5-4B"
 
 # 设置结果目录
-MODEL_DIR="results/qwen3-32b"
+MODEL_DIR="results/qwen35-4b"
 THOUGHT_DIR="$MODEL_DIR/thought"
 REFINE_DIR="$MODEL_DIR/refine"
 CRITIC_DIR="$MODEL_DIR/critic"

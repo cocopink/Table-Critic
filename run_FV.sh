@@ -1,10 +1,12 @@
-base_url=''
-openai_api_key=''
+base_url='https://api.holdai.top/v1'
+openai_api_key='sk-imGTjXAmL44iXSgAZk0ELQ5CogRNdlSVmvUCZdw0FnqCTtfU'
 model_name='qwen2.5-72b-instruct'
-first_n=-1
+first_n=10
+n_proc=4
+chunk_size=4
 
-thought_results_dir='results/thought/tabfact'
-refine_results='results/refine/tabfact'
+thought_results_dir="results/thought/tabfact/${model_name}"
+refine_results="results/refine/tabfact/${model_name}"
 
 
 python thought/TableFV/main.py \
@@ -12,7 +14,9 @@ python thought/TableFV/main.py \
 --base_url $base_url \
 --openai_api_key $openai_api_key \
 --model_name $model_name \
---first_n $first_n
+--first_n $first_n \
+--n_proc $n_proc \
+--chunk_size $chunk_size
 if [ $? -ne 0 ]; then
     echo "Error in thought/TableFV/main.py"
     exit 1
@@ -25,7 +29,9 @@ python refine/TableFV/main_tree_based.py \
 --base_url $base_url \
 --openai_api_key $openai_api_key \
 --model_name $model_name \
---first_n $first_n
+--first_n $first_n \
+--n_proc $n_proc \
+--chunk_size $chunk_size
 if [ $? -ne 0 ]; then
     echo "Error in refine/TableFV/main_tree_based.py"
     exit 1

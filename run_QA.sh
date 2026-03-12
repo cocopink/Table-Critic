@@ -1,7 +1,7 @@
 base_url=''
 openai_api_key=''
 model_name='qwen2.5-72b-instruct'
-first_n=-1
+first_n=10
 
 thought_results_dir='results/thought/wikitq'
 refine_results='results/refine/wikitq'
