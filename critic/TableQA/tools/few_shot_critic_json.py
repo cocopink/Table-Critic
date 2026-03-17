@@ -558,13 +558,23 @@ Step 3 makes an error in counting the number of games with attendance under 1000
 Conclusion: [Incorrect] Step 3"""
 ]
 
+row_error_blueprint = ['The reasoning step omitted relevant rows that satisfied the given criteria.']
+column_error_blueprint = ['The reasoning step incorrectly filtered out the column needed to answer the question.']
+query_error_blueprint = ['The reasoning step made a calculation error when summing or averaging the values.']
+
 def critic_tree_init(file_path = "critic/TableQA/tools/few_shot_critic.json"):
 
     data_dict = {
-        "sub-table error":[
-            row_error[0]
+        "sub-table error":[{
+            'blueprint':row_error_blueprint[0],
+            'content': row_error[0]
+        }
         ],
-        "final query error":[query_error[0]]
+        "final query error":[{
+            'blueprint':query_error_blueprint[0],
+            'content':query_error[0]
+        }
+        ]
 
     }
 

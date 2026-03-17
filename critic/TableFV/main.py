@@ -5,16 +5,16 @@ import fire
 import os
 
 from tools import read_pkl, get_table_log, get_cot_for_critic, get_critique_with_mp
-from thought.TableFV.utils.llm import ChatGPT, LLM
+from thought.TableFV.utils.llm import  LLM
 
 
 
 def main(
-    thought_results_dir: str = "results/thought/tabfact",
-    critic_results_dir: str = "results/critic/tabfact",
-    base_url="",
+    thought_results_dir: str = "results/thought_100/tabfact/qwen3:14b",
+    critic_results_dir: str = "results/critic_100/tabfact/qwen3:14b",
+    base_url="http://localhost:11434/v1",
     openai_api_key="EMPTY",
-    model_name="qwen2.5-72b-instruct",
+    model_name="qwen3:14b",
     first_n=-1,
     n_proc=1,
     chunk_size=1,
@@ -39,9 +39,9 @@ def main(
         all_samples,
         llm=gpt_llm,
         llm_options=gpt_llm.get_model_options(
-            temperature=0.0, per_example_max_decode_steps=500, per_example_top_p=1.0
+            temperature=0.0, per_example_max_decode_steps=2048, per_example_top_p=1.0
         ),
-        cache_dir=os.path.join(critic_results_dir, "cache"),
+        cache_dir=os.path.join(critic_results_dir, "cache_blue"),
         n_proc=n_proc,
         chunk_size=chunk_size,
     )

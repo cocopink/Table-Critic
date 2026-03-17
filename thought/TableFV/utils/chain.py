@@ -70,7 +70,7 @@ def conduct_single_solver(llm, all_samples, solver_func, tqdm_tag=None, **kwargs
             proc_sample = solver_func(sample, table_info, llm, **kwargs)
             result_samples[idx] = proc_sample
         except Exception as e:
-            print(f"Error in {idx}th sample: {e}")
+            print(f"FV-chain.py-conduct_single_solver Error in {idx}th sample: {e}")
             continue
     return result_samples
 
@@ -86,7 +86,7 @@ def _conduct_single_solver_mp_core(arg):
         proc_sample = solver_func(sample, table_info, llm, **kwargs)
         return idx, proc_sample
     except Exception as e:
-        print(f"Error in {idx}-th sample: {e}")
+        print(f"FV-chain.py-_conduct_single_solver_mp_core Error in {idx}-th sample: {e}")
         return idx, None
 
 
@@ -603,7 +603,7 @@ def _dynamic_chain_exec_with_cache_mp_core(arg):
             pickle.dump((sample, proc_sample, log), open(cache_path, "wb"))
         return idx, proc_sample, log
     except Exception as e:
-        print(f"Error in {sample_id}: {e}", flush=True)
+        print(f"FV-chain.py-_dynamic_chain_exec_with_cache_mp_core Error in {sample_id}: {e}", flush=True)
         return idx, None, None
 
 

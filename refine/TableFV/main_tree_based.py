@@ -25,14 +25,14 @@ from agents import (
 )
 
 def main(
-    thought_results_dir: str = "results/thought/tabfact",
-    refine_results_dir: str = "results/refine/tabfact",
-    base_url="",
+    thought_results_dir: str = "results/thought_100/tabfact/qwen3:14b",
+    refine_results_dir: str = "results/refine_100/tabfact/qwen3:14b",
+    base_url="http://localhost:11434/v1",
     openai_api_key="EMPTY",
-    model_name="qwen2.5-72b-instruct",
+    model_name="qwen3:14b",
     first_n=-1,
-    n_proc=10,
-    chunk_size=5,
+    n_proc=1,
+    chunk_size=1,
     use_multi_agent: bool = False,
 ):
     
@@ -143,6 +143,10 @@ def main(
     pickle.dump(
         refine_list, open(os.path.join(refine_results_dir, "final_result.pkl"), "wb")
     )
+
+    # Save accuracy to acc.txt
+    with open(os.path.join(refine_results_dir, "acc.txt"), "w") as f:
+        f.write(f"Refine Stage Accuracy: {acc}\n")
 
 
 if __name__ == "__main__":

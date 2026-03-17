@@ -271,7 +271,10 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
     
     critic_template += f"{thought_log[-1]}\n\n"
 
-    critic_template += "Prediction Answer: \n" + table_log[-1]["cotable_result"].lower() + "\n\n"
+    cotable_result = table_log[-1]["cotable_result"]
+    if isinstance(cotable_result, dict):
+        cotable_result = str(cotable_result)
+    critic_template += "Prediction Answer: \n" + cotable_result.lower() + "\n\n"
 
     critic_template += "Critique:\n" + sample["critique"]  + "\n\n"
 
@@ -287,8 +290,9 @@ Provide only the blueprint sentence, nothing else."""
 
     blueprint_response = llm.generate_plus_with_score(
         blueprint_prompt.format(critique=sample["critique"]),
+        options=llm_options
         # options=llm.get_model_options(temperature=0, max_decode_steps=50)
-        options=llm.get_model_options(temperature=0, per_example_max_decode_steps=50)
+        # options=llm.get_model_options(temperature=0, per_example_max_decode_steps=150)
     )
     blueprint = blueprint_response[0][0].strip()
 
@@ -307,6 +311,7 @@ Provide only the blueprint sentence, nothing else."""
             if error_route != 'random':
                 error_route = error_route.split('->')
                 few_shot = few_shot_dict
+                changed = False
                 for error_type in error_route:
                     error_type = error_type.strip()
                     if error_type in few_shot:
@@ -314,7 +319,10 @@ Provide only the blueprint sentence, nothing else."""
                         few_shot = few_shot[error_type]
                         if isinstance(few_shot,list):
                             vertical_expansion(few_shot, template_dict, error_type, parent_node, llm=llm, llm_options=llm_options)
+                            changed = True
                             break
+                if not changed:
+                    horizontal_expansion(few_shot_dict, template_dict, llm, llm_options)
             else:
                 horizontal_expansion(few_shot_dict, template_dict, llm, llm_options)
             ## 如果不是扩充template，就横向或纵向扩充分支

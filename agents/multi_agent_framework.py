@@ -102,7 +102,7 @@ class BaseAgent:
         self.llm = llm
         self.state = None
 
-    def process(self, sample: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]: # pyright: ignore[reportArgumentType]
+    def process(self, sample: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Process a sample. Must be implemented by subclasses.
 
@@ -177,7 +177,7 @@ class MultiAgentOrchestrator:
     def process_sample(
         self,
         sample: Dict[str, Any],
-        agent_sequence: List[AgentType] = None # type: ignore
+        agent_sequence: List[AgentType] = None
     ) -> Tuple[Dict[str, Any], List[AgentMessage]]:
         """
         Process a sample through the multi-agent pipeline.
@@ -207,7 +207,7 @@ class MultiAgentOrchestrator:
                 continue
 
             agent = self.agents[agent_type]
-            agent.state = AgentState( # type: ignore
+            agent.state = AgentState(
                 agent_type=agent_type,
                 current_sample=current_sample
             )

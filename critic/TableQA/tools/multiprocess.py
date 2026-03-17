@@ -4,7 +4,7 @@ import multiprocessing as mp
 import os
 import pickle
 from tqdm import tqdm
-from .get_info import get_cot_for_critic, get_cot_for_judge, get_cot_for_tree, get_critic_few_shot, get_critic_blueprint, get_judge_few_shot, get_tree_few_shot
+from .get_info import get_cot_for_critic, get_cot_for_judge, get_cot_for_tree, get_critic_few_shot,  get_judge_few_shot, get_tree_few_shot
 from .instruction import critic_instruction, tree_instruction, judge_instruction
 
 
@@ -50,12 +50,15 @@ def _get_critique_with_cache_mp(arg):
             cirtic_sample = pickle.load(open(cache_path, "rb"))
         else:
             cirtic_sample = critic_exec_one_sample(
-                sample, llm=llm, llm_options=llm_options
+                sample, error_route="random", llm=llm, llm_options=llm_options,blueprint_only=True
             )
             pickle.dump(cirtic_sample, open(cache_path, "wb"))
         return idx, cirtic_sample
     except Exception as e:
-        print(f"Error in {sample_id}: {e}", flush=True)
+        import traceback
+        print(f"QA-multiprocess.py-_get_critique_with_cache_mp Error in {sample_id}: {e}", flush=True)
+        print(f"Full traceback: {traceback.format_exc()}", flush=True)
+        
         return idx, None
 
 def critic_exec_one_sample(
@@ -70,10 +73,11 @@ def critic_exec_one_sample(
     prompt += critic_instruction
 
     # Use blueprint mode if requested (first round)
-    if blueprint_only:
-        few_shot = get_critic_blueprint(error_route, few_shot_json="critic/TableQA/tools/few_shot_critic.json")
-    else:
-        few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableQA/tools/few_shot_critic.json")
+    # if blueprint_only:
+    #     few_shot = get_critic_blueprint(error_route, few_shot_json="critic/TableQA/tools/few_shot_critic.json")
+    # else:
+    #     few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableQA/tools/few_shot_critic.json")
+    few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableQA/tools/few_shot_critic.json", selected_blueprint=blueprint_only)
     prompt += few_shot
 
     cot, max_step = get_cot_for_critic(critic_sample)

@@ -1,4 +1,4 @@
-# Copyright  contributors
+# Copyright 2024 Table-Critic contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ class ClarifierAgent(BaseAgent):
         """
         super().__init__(agent_type=AgentType.CLARIFIER, llm=llm)
 
-    def process(self, sample: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]: # pyright: ignore[reportArgumentType]
+    def process(self, sample: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Process a sample using the clarify_sample method.
 

@@ -272,7 +272,10 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
 
     critic_template += f"{thought_log[-1]}\n\n"
 
-    critic_template += "Prediction Answer: \n" + table_log[-1]["cotable_result"].lower() + "\n\n"
+    cotable_result = table_log[-1]["cotable_result"]
+    if isinstance(cotable_result, dict):
+        cotable_result = str(cotable_result)
+    critic_template += "Prediction Answer: \n" + cotable_result.lower() + "\n\n"
 
     critic_template += "Critique:\n" + sample["critique"]  + "\n\n"
 

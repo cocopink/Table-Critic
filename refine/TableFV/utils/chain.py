@@ -62,7 +62,7 @@ def _conduct_single_solver_mp_core(arg):
 
         return idx, proc_sample
     except Exception as e:
-        print(f"Error in {idx}-th sample: {e}")
+        print(f"FV-chain.py-_conduct_single_solver_mp_core Error in {idx}-th sample: {e}")
         return idx, None
 
 
@@ -810,7 +810,7 @@ def _dynamic_chain_exec_with_cache_mp_core(arg):
             pickle.dump((proc_sample), open(cache_path, "wb"))
         return idx, proc_sample
     except Exception as e:
-        print(f"Error in {sample_id}: {e}", flush=True)
+        print(f"FV-chain.py-_dynamic_chain_exec_with_cache_mp_core Error in {sample_id}: {e}", flush=True)
         return idx, None
 
 
@@ -881,7 +881,7 @@ def _critic_refine_with_cache_mp_core(arg):
         if os.path.exists(cache_path):
             proc_sample = pickle.load(open(cache_path, "rb"))
         else:
-            critic_sample = critic_exec_one_sample(sample, llm=llm, llm_options=llm_options)
+            critic_sample = critic_exec_one_sample(sample, error_route="random", llm=llm, llm_options=llm_options)
             if critic_sample['conclusion'] == '[Correct]':
                 proc_sample = critic_sample
             else:
@@ -909,7 +909,7 @@ def _critic_refine_with_cache_mp_core(arg):
                             )
                             proc_sample = simple_query_with_critic(critic_sample, table_info, llm, llm_options=llm.get_model_options(temperature=0, per_example_max_decode_steps=200, per_example_top_p=1.0))
                         loop_count += 1
-                        critic_sample = critic_exec_one_sample(proc_sample, llm=llm, llm_options=llm_options)
+                        critic_sample = critic_exec_one_sample(proc_sample, error_route="random", llm=llm, llm_options=llm_options)
                     else:
                         proc_sample = critic_sample
                         break
@@ -917,7 +917,7 @@ def _critic_refine_with_cache_mp_core(arg):
             pickle.dump((proc_sample), open(cache_path, "wb"))
         return idx, proc_sample
     except Exception as e:
-        print(f"Error in {sample_id}: {e}", flush=True)
+        print(f"FV-chain.py-_critic_refine_with_cache_mp_core Error in {sample_id}: {e}", flush=True)
         return idx, None
     
 def judge_critic_refine_with_cache_mp(
@@ -950,9 +950,8 @@ def judge_critic_refine_with_cache_mp(
 
     return result_samples
 
-def _judge_critic_refine_with_cache_mp_core(arg):
+def _judge_critic_refine_with_cache_mp_core_test(arg):
     idx, sample, llm, llm_options, strategy, cache_dir, lock = arg
-
     cache_filename = "case-{}.pkl"
     try:
         sample_id = sample["id"]
@@ -962,59 +961,191 @@ def _judge_critic_refine_with_cache_mp_core(arg):
         else:
             judge_sample = judge_exec_one_sample(sample, llm=llm, llm_options=llm_options)
             judge = judge_sample['judge'].strip()
-            if judge == '[Correct]':
+            judge = judge.strip('*')
+            tree_sample = tree_exec_one_sample(judge_sample, llm=llm, llm_options=llm_options)
+            routes = re.findall(r'\((.*?)\)', tree_sample['tree'])
+            if routes:
+                error_route = routes[0]
+            else:
+                error_route = "random"
+            critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=True)
+            
+            table_info = get_table_info(
+                critic_sample,
+                skip_op=[],
+                first_n_op=None,
+            )
+            refine_sample = simple_query_with_critic(critic_sample, table_info, llm, llm_options=llm.get_model_options(temperature=0, per_example_max_decode_steps=2048, per_example_top_p=1.0))
+                        
+            judge_sample = judge_exec_one_sample(refine_sample, llm=llm, llm_options=llm_options)
+            judge = judge_sample['judge'].strip()
+            proc_sample = judge_sample
+            if  '[Correct]' in judge:
+                update_error_tree(critic_sample, error_route, error_tree_json="critic/TableFV/tools/few_shot_critic.json", llm=llm, llm_options=llm_options, lock=lock)         
+        pickle.dump((proc_sample), open(cache_path, "wb"))
+        return idx, proc_sample
+    except Exception as e:
+        print(f"FV-chain.py-_judge_critic_refine_with_cache_mp_core_test Error in {sample_id}: {e}", flush=True)
+        return idx, None
+    
+
+# def _judge_critic_refine_with_cache_mp_core(arg):
+#     idx, sample, llm, llm_options, strategy, cache_dir, lock = arg
+#     cache_filename = "case-{}.pkl"
+#     try:
+#         sample_id = sample["id"]
+#         cache_path = os.path.join(cache_dir, cache_filename.format(idx))
+#         if os.path.exists(cache_path):
+#             proc_sample = pickle.load(open(cache_path, "rb"))
+#         else:
+#             judge_sample = judge_exec_one_sample(sample, llm=llm, llm_options=llm_options)
+#             judge = judge_sample['judge'].strip()
+#             judge = judge.strip('*')
+#             if '[Correct]' in judge:
+#                 proc_sample = judge_sample
+#             else:
+#                 loop_count = 0
+#                 while(loop_count < 2):
+#                     tree_sample = tree_exec_one_sample(judge_sample, llm=llm, llm_options=llm_options)
+#                     routes = re.findall(r'\((.*?)\)', tree_sample['tree'])
+#                     if routes:
+#                         error_route = routes[0]
+#                     else:
+#                         error_route = "random"
+                    
+#                     # First round: use blueprint mode (only blueprint descriptions)
+#                     if loop_count == 0:
+#                         critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=True)
+#                     else:
+#                         # Second round and beyond: use full few-shot examples (original logic)
+#                         critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=False)
+                    
+#                     incorrect_step, max_step = return_incorrect_max_step(critic_sample)
+#                     if incorrect_step:
+#                         if incorrect_step != max_step:      # Error occurred while dynamically generating table
+#                             refine_chain_sample = dynamic_chain_exec_one_sample(
+#                                 critic_sample, llm=llm, incorrect_step=incorrect_step, max_step=max_step, llm_options=llm_options, strategy=strategy
+#                             )
+#                             table_info = get_table_info(
+#                                 refine_chain_sample,
+#                                 skip_op=[],
+#                                 first_n_op=None,
+#                             )
+#                             refine_sample = simple_query_cot_original(refine_chain_sample, table_info, llm, llm_options=llm.get_model_options(temperature=0, per_example_max_decode_steps=2048, per_example_top_p=1.0))
+#                         else:
+#                             wo_query_sample = copy.deepcopy(critic_sample)
+#                             wo_query_sample['chain'] = wo_query_sample['chain'][:-1]
+#                             table_info = get_table_info(
+#                                 wo_query_sample,
+#                                 skip_op=[],
+#                                 first_n_op=None,
+#                             )
+#                             refine_sample = simple_query_with_critic(critic_sample, table_info, llm, llm_options=llm.get_model_options(temperature=0, per_example_max_decode_steps=2048, per_example_top_p=1.0))
+#                         loop_count += 1
+#                         judge_sample = judge_exec_one_sample(refine_sample, llm=llm, llm_options=llm_options)
+#                         judge = judge_sample['judge'].strip()
+#                         proc_sample = judge_sample
+#                         if  '[Correct]' in judge:
+#                             update_error_tree(critic_sample, error_route, error_tree_json="critic/TableFV/tools/few_shot_critic.json", llm=llm, llm_options=llm_options, lock=lock)
+#                             break       
+#                     else:
+#                         proc_sample = critic_sample
+#                         break
+
+#             pickle.dump((proc_sample), open(cache_path, "wb"))
+#         return idx, proc_sample
+#     except Exception as e:
+#         print(f"FV-chain.py-_judge_critic_refine_with_cache_mp_core Error in {sample_id}: {e}", flush=True)
+#         return idx, None
+def _judge_critic_refine_with_cache_mp_core(arg):
+    idx, sample, llm, llm_options, strategy, cache_dir, lock = arg
+    cache_filename = "case-{}.pkl"
+    try:
+        sample_id = sample["id"]
+        cache_path = os.path.join(cache_dir, cache_filename.format(idx))
+        
+        # 添加阶段标记
+        current_stage = "initialization"
+        
+        if os.path.exists(cache_path):
+            current_stage = "loading_cache"
+            proc_sample = pickle.load(open(cache_path, "rb"))
+        else:
+            current_stage = "judge_execution"
+            judge_sample = judge_exec_one_sample(sample, llm=llm, llm_options=llm_options)
+            judge = judge_sample['judge'].strip()
+            judge = judge.strip('*')
+            
+            if '[Correct]' in judge:
                 proc_sample = judge_sample
             else:
                 loop_count = 0
-                while(loop_count < 2):
+                while loop_count < 2:
+                    current_stage = f"loop_{loop_count}_tree_execution"
                     tree_sample = tree_exec_one_sample(judge_sample, llm=llm, llm_options=llm_options)
-                    routes = re.findall(r'\((.*?)\)', tree_sample['tree'])
-                    if routes:
-                        error_route = routes[0]
-                    else:
-                        error_route = "random"
                     
-                    # First round: use blueprint mode (only blueprint descriptions)
+                    current_stage = f"loop_{loop_count}_route_extraction"
+                    routes = re.findall(r'\((.*?)\)', tree_sample['tree'])
+                    error_route = routes[0] if routes else "random"
+                    
+                    current_stage = f"loop_{loop_count}_critic_execution"
                     if loop_count == 0:
                         critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=True)
                     else:
-                        # Second round and beyond: use full few-shot examples (original logic)
                         critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=False)
                     
+                    current_stage = f"loop_{loop_count}_step_analysis"
                     incorrect_step, max_step = return_incorrect_max_step(critic_sample)
+                    
                     if incorrect_step:
-                        if incorrect_step != max_step:      # Error occurred while dynamically generating table
+                        current_stage = f"loop_{loop_count}_refinement"
+                        if incorrect_step != max_step:
                             refine_chain_sample = dynamic_chain_exec_one_sample(
                                 critic_sample, llm=llm, incorrect_step=incorrect_step, max_step=max_step, llm_options=llm_options, strategy=strategy
                             )
+                            current_stage = f"loop_{loop_count}_table_info"
                             table_info = get_table_info(
                                 refine_chain_sample,
                                 skip_op=[],
                                 first_n_op=None,
                             )
+                            current_stage = f"loop_{loop_count}_query_original"
                             refine_sample = simple_query_cot_original(refine_chain_sample, table_info, llm, llm_options=llm.get_model_options(temperature=0, per_example_max_decode_steps=2048, per_example_top_p=1.0))
                         else:
+                            current_stage = f"loop_{loop_count}_wo_query"
                             wo_query_sample = copy.deepcopy(critic_sample)
                             wo_query_sample['chain'] = wo_query_sample['chain'][:-1]
+                            current_stage = f"loop_{loop_count}_table_info_wo"
                             table_info = get_table_info(
                                 wo_query_sample,
                                 skip_op=[],
                                 first_n_op=None,
                             )
+                            current_stage = f"loop_{loop_count}_query_with_critic"
                             refine_sample = simple_query_with_critic(critic_sample, table_info, llm, llm_options=llm.get_model_options(temperature=0, per_example_max_decode_steps=2048, per_example_top_p=1.0))
+                        
                         loop_count += 1
+                        current_stage = f"loop_{loop_count}_judge_after_refine"
                         judge_sample = judge_exec_one_sample(refine_sample, llm=llm, llm_options=llm_options)
                         judge = judge_sample['judge'].strip()
                         proc_sample = judge_sample
-                        if judge == '[Correct]':
+                        
+                        if '[Correct]' in judge:
+                            current_stage = f"loop_{loop_count}_update_tree"
                             update_error_tree(critic_sample, error_route, error_tree_json="critic/TableFV/tools/few_shot_critic.json", llm=llm, llm_options=llm_options, lock=lock)
                             break       
                     else:
+                        current_stage = f"loop_{loop_count}_no_incorrect_step"
                         proc_sample = critic_sample
                         break
 
-            pickle.dump((proc_sample), open(cache_path, "wb"))
+            current_stage = "saving_cache"
+            pickle.dump(proc_sample, open(cache_path, "wb"))
+        
         return idx, proc_sample
+        
     except Exception as e:
-        print(f"Error in {sample_id}: {e}", flush=True)
+        import traceback
+        print(f"FV-chain.py-_judge_critic_refine_with_cache_mp_core Error at stage '{current_stage}' for sample {sample_id}: {e}", flush=True)
+        print(f"Full traceback: {traceback.format_exc()}", flush=True)
         return idx, None

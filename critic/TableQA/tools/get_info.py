@@ -58,16 +58,32 @@ def get_table_log(sample, skip_op=[], first_n_op=None):
 
     return table_log, thought_log
 
-def get_terminal_nodes(input_dict):
+def get_terminal_nodes(input_dict,selected_blueprint = False):
     terminal_nodes = []
     for key, value in input_dict.items():
         if isinstance(value, dict):
             terminal_nodes.extend(get_terminal_nodes(value))
+        elif isinstance(value, list):
+            # Handle list items - they can be strings or dicts
+            for item in value:
+                if isinstance(item, dict):
+                    # New format: dict with 'content' field
+                    if selected_blueprint and 'blueprint' in item:
+                        terminal_nodes.append(item['blueprint'])
+                    elif 'content' in item:
+                        terminal_nodes.append(item['content'])
+                    else:
+                        # Fallback: convert dict to string
+                        terminal_nodes.append(str(item))
+                else:
+                    # Old format: string
+                    terminal_nodes.append(item)
         else:
-            terminal_nodes.extend(value)
+            # Direct string value
+            terminal_nodes.append(value)
     return terminal_nodes
 
-def return_error_shot(error_route, few_shot_dict):
+def return_error_shot(error_route, few_shot_dict,selected_blueprint = False):
     if error_route != 'random':
         error_route = error_route.split('->')
         few_shot = copy.deepcopy(few_shot_dict)
@@ -78,9 +94,19 @@ def return_error_shot(error_route, few_shot_dict):
                 if isinstance(few_shot,list):
                     if len(few_shot) > 5:
                         few_shot = random.sample(few_shot, 5)
+                        new_few_shot = []
+                        for item in few_shot:
+                            if isinstance(item, dict):
+                                if selected_blueprint and 'blueprint' in item:
+                                    new_few_shot.append(item['blueprint'])
+                                elif 'content' in item:
+                                    new_few_shot.append(item['content'])
+                                else:
+                                    new_few_shot.append(str(item))
+                        few_shot = new_few_shot
                     return few_shot
                 
-    few_shot = get_terminal_nodes(few_shot_dict)     # If it does't return correctly, then randomly choose
+    few_shot = get_terminal_nodes(few_shot_dict, selected_blueprint)     # If it does't return correctly, then randomly choose
     few_shot = random.sample(few_shot, min(5, len(few_shot)))
     return few_shot
 
@@ -97,64 +123,75 @@ def replace_leaves_with_end(tree_data):
     return data
 
 def get_cot_for_critic(sample):
+    try:
 
 
-    cot = "Now, determine which step of the table reasoning is incorrect, give a critique and give a conclusion according to the format 'Conclusion: [Incorrect] Step <NUM>': \nOriginal Table:\n/*\n"
-    cot += table2string(sample['table_text']) + "\n*/\n\n"
-    cot += "Question: \n" +  sample['statement'] + "\n\n"
+        cot = "Now, determine which step of the table reasoning is incorrect, give a critique and give a conclusion according to the format 'Conclusion: [Incorrect] Step <NUM>': \nOriginal Table:\n/*\n"
+        cot += table2string(sample['table_text']) + "\n*/\n\n"
+        cot += "Question: \n" +  sample['statement'] + "\n\n"
 
-    cot += "Reasoning Steps:\n"
+        cot += "Reasoning Steps:\n"
 
-    table_log, thought_log = get_table_log(sample)
+        table_log, thought_log = get_table_log(sample)
 
-    step = 0
-    action_list = []
-    table_text = sample['table_text']
-    for idx, table_info in enumerate(table_log[:-1]):
-        if table_info["act_chain"]:
-            table_action = table_info["act_chain"][-1]
-            if "skip" in table_action:
-                continue
-            else:
-                table_text = table_info["table_text"]
-                action_list.append(table_action)
-                cot += f"Step{step+1}: {thought_log[idx]}\n"
-                cot += f"So we use {table_action}.\n\n"
-                step += 1
+        step = 0
+        action_list = []
+        table_text = sample['table_text']
+        for idx, table_info in enumerate(table_log[:-1]):
+            if table_info["act_chain"]:
+                table_action = table_info["act_chain"][-1]
+                if "skip" in table_action:
+                    continue
+                else:
+                    table_text = table_info["table_text"]
+                    action_list.append(table_action)
+                    cot += f"Step{step+1}: {thought_log[idx]}\n"
+                    cot += f"So we use {table_action}.\n\n"
+                    step += 1
 
 
-    if len(action_list):
-        cot += f"Step{step+1}: After using "
-        step += 1
-        max_idx = len(action_list) - 1
-        for idx, act in enumerate(action_list):
-            cot += act
-            if idx < max_idx-1:
-                cot += ", "
-            elif idx == max_idx-1:
-                cot += " and "
-        cot += ", we obtain the sub-table:\n/*\n"
-        cot += f"{table2string(table_text)}\n*/\n"
-        if "group_sub_table" in table_info:
-            group_column, group_info = table_info["group_sub_table"]
-            cot += "/*\n"
-            cot += "Group the rows according to column: {}.\n".format(group_column)
-            group_headers = ["Group ID", group_column, "Count"]
-            group_rows = []
-            for i, (v, count) in enumerate(group_info):
-                if v.strip() == "":
-                    v = "[Empty Cell]"
-                group_rows.append([f"Group {i+1}", v, str(count)])
-            cot += " | ".join(group_headers) + "\n"
-            for row in group_rows:
-                cot += " | ".join(row) + "\n"
-            cot += "*/\n"
-    
-    cot += f"{thought_log[-1]}\n\n"
+        if len(action_list):
+            cot += f"Step{step+1}: After using "
+            step += 1
+            max_idx = len(action_list) - 1
+            for idx, act in enumerate(action_list):
+                cot += act
+                if idx < max_idx-1:
+                    cot += ", "
+                elif idx == max_idx-1:
+                    cot += " and "
+            cot += ", we obtain the sub-table:\n/*\n"
+            cot += f"{table2string(table_text)}\n*/\n"
+            if "group_sub_table" in table_info:
+                group_column, group_info = table_info["group_sub_table"]
+                cot += "/*\n"
+                cot += "Group the rows according to column: {}.\n".format(group_column)
+                group_headers = ["Group ID", group_column, "Count"]
+                group_rows = []
+                for i, (v, count) in enumerate(group_info):
+                    if v.strip() == "":
+                        v = "[Empty Cell]"
+                    group_rows.append([f"Group {i+1}", v, str(count)])
+                cot += " | ".join(group_headers) + "\n"
+                for row in group_rows:
+                    cot += " | ".join(row) + "\n"
+                cot += "*/\n"
+        
+        cot += f"{thought_log[-1]}\n\n"
 
-    cot += "Prediction Answer: \n" + table_log[-1]["cotable_result"].lower() + "\n\n" + "Critique:"
+        cotable_result = table_log[-1]["cotable_result"]
+        if isinstance(cotable_result, dict):
+            cotable_result = str(cotable_result)
+        elif isinstance(cotable_result, list):
+            cotable_result = str(cotable_result)
+        cot += "Prediction Answer: \n" + str(cotable_result).lower() + "\n\n" + "Critique:"
 
-    return cot, step
+        return cot, step
+    except Exception as e:
+        import traceback
+        print(f"QA-get_info.py-get_cot_for_critic Error: {e}")
+        print(traceback.format_exc())
+        raise
 
 def get_cot_for_judge(sample):
 
@@ -164,7 +201,10 @@ def get_cot_for_judge(sample):
 
     table_log, thought_log = get_table_log(sample)
 
-    cot += "Prediction Answer: \n" + table_log[-1]["cotable_result"].lower() + "\n\n" + "Explanation:"
+    cotable_result = table_log[-1]["cotable_result"]
+    if isinstance(cotable_result, dict):
+        cotable_result = str(cotable_result)
+    cot += "Prediction Answer: \n" + cotable_result.lower() + "\n\n" + "Explanation:"
 
     return cot
 
@@ -233,48 +273,39 @@ Original Table:\n/*\n"""
     
     cot += f"{thought_log[-1]}\n\n"
 
-    cot += "Prediction Answer: \n" + table_log[-1]["cotable_result"].lower() + "\n\n" + "Analysis:"
+    cotable_result = table_log[-1]["cotable_result"]
+    if isinstance(cotable_result, dict):
+        cotable_result = str(cotable_result)
+    cot += "Prediction Answer: \n" + cotable_result.lower() + "\n\n" + "Analysis:"
 
     return cot
 
-def get_critic_few_shot(error_route, few_shot_json= "critic_few_shot.json"):
+def get_critic_few_shot(error_route, few_shot_json= "critic_few_shot.json",selected_blueprint = False):
     few_shot = "\nHere are some examples.\n\n"
 
     with open(few_shot_json, 'r') as f:
         few_shot_dict = json.load(f)
-        selected_few_shot = return_error_shot(error_route, few_shot_dict)
-
+        selected_few_shot = return_error_shot(error_route, few_shot_dict,selected_blueprint)
+    print("few_shot_json",few_shot_json)
     random.shuffle(selected_few_shot)
 
     for idx, shot in enumerate(selected_few_shot):
-        few_shot += f"Example {idx+1}:\n" + shot + "\n\n\n"
+        print("idx, shot",idx, type(shot),shot)
+        if isinstance(shot,dict) :
+            if selected_blueprint and 'blueprint' in shot:
+                few_shot += f"Example {idx+1}:\n" + shot['blueprint'] + "\n\n\n"
+            elif 'content' in shot:
+                few_shot += f"Example {idx+1}:\n" + shot['content'] + "\n\n\n"
+            else:
+                few_shot += f"Example {idx+1}:\n" + str(shot) + "\n\n\n"
+        else:
+            few_shot += f"Example {idx+1}:\n" + str(shot) + "\n\n\n"
+        
 
     return few_shot
 
 
-def get_critic_blueprint(error_route, few_shot_json="critic_few_shot.json"):
-    """
-    Get blueprint descriptions from few-shot samples.
-    If a sample has a 'blueprint' field, extract it.
-    Otherwise, extract the full content as fallback.
-    """
-    blueprint_text = "\nHere are some error blueprints.\n\n"
 
-    with open(few_shot_json, 'r') as f:
-        few_shot_dict = json.load(f)
-        selected_few_shot = return_error_shot(error_route, few_shot_dict)
-
-    random.shuffle(selected_few_shot)
-
-    for idx, shot in enumerate(selected_few_shot):
-        # Check if shot is a dict with blueprint field
-        if isinstance(shot, dict) and 'blueprint' in shot:
-            blueprint_text += f"Example {idx+1}:\nBlueprint: {shot['blueprint']}\n\n\n"
-        else:
-            # Fallback: use the full shot content if blueprint not available
-            blueprint_text += f"Example {idx+1}:\n{shot}\n\n\n"
-
-    return blueprint_text
 
 def get_tree_few_shot(few_shot_json= "few_shot_tree.json"):
     few_shot = "\nHere are some examples.\n\n"
