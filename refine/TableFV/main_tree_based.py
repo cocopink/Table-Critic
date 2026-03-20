@@ -23,10 +23,11 @@ from agents import (
     MultiAgentOrchestrator,
     DisputeHandler
 )
+from utils.controller import controller_main_loop
 
 def main(
     thought_results_dir: str = "results/thought_100/tabfact/qwen3:14b",
-    refine_results_dir: str = "results/refine_100/tabfact/qwen3:14b",
+    refine_results_dir: str = "results/refine_100_control/tabfact/qwen3:14b",
     base_url="http://localhost:11434/v1",
     openai_api_key="EMPTY",
     model_name="qwen3:14b",
@@ -34,6 +35,7 @@ def main(
     n_proc=1,
     chunk_size=1,
     use_multi_agent: bool = False,
+    use_controller: bool = True,
 ):
     
     result_pkl = os.path.join(thought_results_dir, "final_result.pkl")
@@ -114,6 +116,38 @@ def main(
 
             refined_samples.append(refined_sample)
 
+        refine_list = refined_samples
+
+    elif use_controller:
+        # Use controller-based refinement
+        print("Using controller-based refinement...")
+        
+        # Initialize critic tree
+        critic_tree_init(file_path="critic/TableFV/tools/few_shot_critic.json")
+        
+        # Process samples with controller
+        refined_samples = []
+        for sample in all_samples:
+            sample_id = sample.get('id', 'unknown')
+            
+            # Use Controller main loop
+            refined_sample = controller_main_loop(
+                sample,
+                llm=gpt_llm,
+                llm_options=gpt_llm.get_model_options(
+                    temperature=0,
+                    per_example_max_decode_steps=2048,
+                    per_example_top_p=1
+                ),
+                max_iterations=2
+            )
+            
+            # Save to cache
+            cache_path = os.path.join(cache_dir, f'case_{sample_id}.pkl')
+            pickle.dump(refined_sample, open(cache_path, 'wb'))
+            
+            refined_samples.append(refined_sample)
+        
         refine_list = refined_samples
 
     else:

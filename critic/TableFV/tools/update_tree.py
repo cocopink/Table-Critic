@@ -200,22 +200,50 @@ def horizontal_expansion(few_shot_dict, template_dict, llm, llm_options):
     prompt += f"Template:\n{template_dict['content']}\n\n"
     prompt += "Explanation:\n"
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
-    if "Addition" in responses[0][0]:
-        route = re.findall(r'\((.*?)\)', responses[0][0].split("Addition:")[-1])
-        if route:
-            route = route[0]
-        if '->' in route:
-            route = route.split('->')
-            few_shot = few_shot_dict
-            for error_type in route:
-                error_type = error_type.strip()
-                if error_type in few_shot:
-                    few_shot = few_shot[error_type]
-                elif error_type != '<END>' and isinstance(few_shot, dict):
-                    few_shot[error_type] = [template_dict]
-                    break
-                else:
-                    break
+    
+    # 调试信息
+    response_text = responses[0][0]
+    print(f"[DEBUG horizontal_expansion] LLM response length: {len(response_text)}")
+    print(f"[DEBUG horizontal_expansion] Contains 'Addition': {'Addition' in response_text}")
+    
+    if "Addition" in response_text:
+        # 提取 Addition 部分
+        addition_part = response_text.split("Addition:")[-1]
+        print(f"[DEBUG horizontal_expansion] Addition part: {addition_part[:200]}")
+        
+        # 使用正则表达式提取第一个括号内容（只匹配第一个括号）
+        # 修复：只匹配第一个括号，避免匹配到解释文本中的括号
+        match = re.search(r'\(([^)]+)\)', addition_part)
+        if match:
+            route = match.group(1)
+            # 清理路由：去除首尾空格，并去除可能的尾随符号如 "'"
+            route = route.strip().rstrip("'").strip()
+            print(f"[DEBUG horizontal_expansion] Cleaned route: '{route}'")
+            
+            if '->' in route:
+                route_parts = route.split('->')
+                print(f"[DEBUG horizontal_expansion] Route parts: {route_parts}")
+                
+                few_shot = few_shot_dict
+                for error_type in route_parts:
+                    error_type = error_type.strip()
+                    print(f"[DEBUG horizontal_expansion] Processing error_type: '{error_type}'")
+                    if error_type in few_shot:
+                        print(f"[DEBUG horizontal_expansion] Found '{error_type}' in few_shot")
+                        few_shot = few_shot[error_type]
+                    elif error_type != '<END>' and isinstance(few_shot, dict):
+                        print(f"[DEBUG horizontal_expansion] Adding new error_type: '{error_type}'")
+                        few_shot[error_type] = [template_dict]
+                        break
+                    else:
+                        print(f"[DEBUG horizontal_expansion] Cannot process error_type: '{error_type}'")
+                        break
+            else:
+                print("[DEBUG horizontal_expansion] No '->' in route, skipping")
+        else:
+            print("[DEBUG horizontal_expansion] No parentheses found in Addition, skipping")
+    else:
+        print("[DEBUG horizontal_expansion] No 'Addition' found, tree not modified")
 
 def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lock):
     critic_template = ""
