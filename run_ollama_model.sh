@@ -43,6 +43,9 @@ CHUNK_SIZE=1
 # 任务类型（FV 或 QA）
 TASK_TYPE="QA"
 
+# Controller 参数（默认启用）
+USE_CONTROLLER=True
+
 # 结果目录配置（不包含模型名，将在运行时动态添加）
 # BASE_THOUGHT_RESULTS_FV='results/thought_100/tabfact'
 # BASE_REFINE_RESULTS_FV='results/refine_100/tabfact'
@@ -71,6 +74,7 @@ print_help() {
     echo "  -n, --first_n NUM    处理前 N 个样本 (默认: -1, 表示全部)"
     echo "  -p, --n_proc NUM     进程数 (默认: 1)"
     echo "  -c, --chunk_size NUM 批次大小 (默认: 1)"
+    echo "  --use_controller BOOL 是否使用 controller (默认: True)"
     echo "  --num_parallel NUM   Ollama 并行请求数 (默认: ${OLLAMA_NUM_PARALLEL})"
     echo "  --context_length NUM Ollama 上下文长度 (默认: ${OLLAMA_CONTEXT_LENGTH})"
     echo "  -h, --help           显示此帮助信息"
@@ -233,7 +237,8 @@ run_table_fv() {
         --first_n $FIRST_N \
         --n_proc $N_PROC \
         --chunk_size $CHUNK_SIZE \
-        --use_multi_agent $USE_MULTI_AGENT
+        --use_multi_agent $USE_MULTI_AGENT \
+        --use_controller $USE_CONTROLLER
 
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: refine/TableFV/main_tree_based.py 执行失败${NC}"
@@ -304,7 +309,8 @@ run_table_qa() {
         --first_n $FIRST_N \
         --n_proc $N_PROC \
         --chunk_size $CHUNK_SIZE \
-        --use_multi_agent $USE_MULTI_AGENT
+        --use_multi_agent $USE_MULTI_AGENT \
+        --use_controller $USE_CONTROLLER
     
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: refine/TableQA/main_tree_based.py 执行失败${NC}"
@@ -348,8 +354,12 @@ while [[ $# -gt 0 ]]; do
             CHUNK_SIZE="$2"
             shift 2
             ;;
-        -u | --use_multi_size)
+        -u|--use_multi_agent)
             USE_MULTI_AGENT="$2"
+            shift 2
+            ;;
+        --use_controller)
+            USE_CONTROLLER="$2"
             shift 2
             ;;
         --num_parallel)
@@ -403,6 +413,7 @@ echo "模型: ${MODEL}"
 echo "处理样本数: ${FIRST_N}"
 echo "进程数: ${N_PROC}"
 echo "批次大小: ${CHUNK_SIZE}"
+echo "使用 Controller: ${USE_CONTROLLER}"
 echo "Ollama 并行数: ${OLLAMA_NUM_PARALLEL}"
 echo "Ollama 上下文长度: ${OLLAMA_CONTEXT_LENGTH}"
 echo "=========================================="
