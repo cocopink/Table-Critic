@@ -1,7 +1,7 @@
 #!/bin/bash
 # 顺序执行三个任务，每个任务完成后才启动下一个
 echo "Starting 1 task (FV with qwen3:32b)..."
-nohup ./run_ollama_model.sh -t FV -m qwen3:32b -u False -n -1 -c 8  > logs/mr_0320FV_32b.log 2>&1 &
+nohup ./run_ollama_model.sh -t FV -m qwen3:32b -u False --use_controller  -n -1 -c 8  > logs/mr_0320FV_32b.log 2>&1 &
 pid=$!
 wait $pid
 echo "1 task finished."
