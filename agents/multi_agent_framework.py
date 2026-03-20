@@ -36,6 +36,7 @@ class AgentType(Enum):
     REFINER = "refiner"
     VALIDATOR = "validator"
     CURATOR = "curator"
+    RETRIEVER = "retriever"
 
 
 class MessageType(Enum):

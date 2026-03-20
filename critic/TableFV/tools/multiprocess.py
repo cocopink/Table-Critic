@@ -3,6 +3,7 @@ import json
 import multiprocessing as mp
 import os
 import pickle
+import random
 from tqdm import tqdm
 from .get_info import get_cot_for_critic, get_cot_for_judge, get_cot_for_tree, get_critic_few_shot, get_judge_few_shot, get_tree_few_shot
 from .instruction import critic_instruction, tree_instruction, judge_instruction
@@ -63,18 +64,57 @@ def critic_exec_one_sample(
     error_route,
     llm,
     llm_options=None,
-    blueprint_only=False
+    blueprint_only=False,
+    pre_retrieved_few_shot=None  # 新增：接受预检索的 few-shot 数据，避免重复检索
 ):
     critic_sample = copy.deepcopy(sample)
     prompt = ""
     prompt += critic_instruction
 
-    # Use blueprint mode if requested (first round)
-    # if blueprint_only:
-    #     few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableFV/tools/few_shot_critic.json",selected_blueprint=True)
-    # else:
-    #     few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableFV/tools/few_shot_critic.json",selected_blueprint=False)
-    few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableFV/tools/few_shot_critic.json",selected_blueprint=blueprint_only)
+    # 优化：如果传入了预检索的 few-shot 数据，直接使用；否则从 JSON 文件检索
+    # 修复3：确保过滤逻辑与 get_critic_few_shot 函数一致
+    if pre_retrieved_few_shot is not None:
+        # 使用预检索的数据，根据 blueprint_only 过滤
+        # 逻辑：
+        # - blueprint_only=True: 优先选择有 blueprint 字段的项，如果没有则选择所有项并将 dict 转为 str
+        # - blueprint_only=False: 选择所有项，优先使用 content，如果没有则将 dict 转为 str
+        few_shot = "\nHere are some examples.\n\n"
+        
+        if blueprint_only:
+            # Blueprint 模式：优先选择有 blueprint 字段的项
+            selected_shots = [s for s in pre_retrieved_few_shot if isinstance(s, dict) and 'blueprint' in s]
+            # 如果没有找到有 blueprint 的项，选择所有项
+            if not selected_shots:
+                selected_shots = pre_retrieved_few_shot
+        else:
+            # Few-shot 模式：选择所有项
+            selected_shots = pre_retrieved_few_shot
+        
+        random.shuffle(selected_shots)
+        
+        for idx, shot in enumerate(selected_shots):
+            if isinstance(shot, dict):
+                if blueprint_only:
+                    # Blueprint 模式：优先使用 blueprint，如果没有则将 dict 转为 str
+                    if 'blueprint' in shot:
+                        few_shot += f"Example {idx+1}:\n" + shot['blueprint'] + "\n\n\n"
+                    else:
+                        # 没有 blueprint 字段，将整个字典转为字符串
+                        few_shot += f"Example {idx+1}:\n" + str(shot) + "\n\n\n"
+                else:
+                    # Few-shot 模式：优先使用 content，如果没有则将 dict 转为 str
+                    if 'content' in shot:
+                        few_shot += f"Example {idx+1}:\n" + shot['content'] + "\n\n\n"
+                    else:
+                        # 没有 content 字段，将整个字典转为字符串
+                        few_shot += f"Example {idx+1}:\n" + str(shot) + "\n\n\n"
+            else:
+                # 旧格式：字符串直接使用
+                few_shot += f"Example {idx+1}:\n" + str(shot) + "\n\n\n"
+    else:
+        # 没有预检索数据，从 JSON 文件检索（向后兼容）
+        few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableFV/tools/few_shot_critic.json",selected_blueprint=blueprint_only)
+    
     prompt += few_shot
 
     cot, max_step = get_cot_for_critic(critic_sample)

@@ -247,7 +247,7 @@ class MinimalController:
                 )
             elif state.last_action in [ControllerAction.DIAGNOSE_BP, ControllerAction.DIAGNOSE_FS]:
                 # 诊断后，根据 incorrect_step 决定精炼类型
-                from refine.TableFV.utils.extract_step import return_incorrect_max_step
+                from refine.TableQA.utils.extract_step import return_incorrect_max_step
                 incorrect_step, max_step = return_incorrect_max_step(state.sample)
                 if incorrect_step and incorrect_step != max_step:
                     return Decision(
@@ -274,7 +274,7 @@ class MinimalController:
                 )
             elif state.last_action in [ControllerAction.DIAGNOSE_FS, ControllerAction.REFINE_CHAIN, ControllerAction.REFINE_QUERY]:
                 # 诊断/精炼后，根据 incorrect_step 决定精炼类型
-                from refine.TableFV.utils.extract_step import return_incorrect_max_step
+                from refine.TableQA.utils.extract_step import return_incorrect_max_step
                 incorrect_step, max_step = return_incorrect_max_step(state.sample)
                 if incorrect_step and incorrect_step != max_step:
                     return Decision(
@@ -310,7 +310,7 @@ class MinimalController:
             Decision: 决策结果
         """
         # 获取诊断信息
-        from refine.TableFV.utils.extract_step import return_incorrect_max_step
+        from refine.TableQA.utils.extract_step import return_incorrect_max_step
         incorrect_step, max_step = return_incorrect_max_step(state.sample)
         
         # 阶段2：使用_llm_decide_diagnose中存储的retrieval_info
@@ -403,7 +403,7 @@ Output JSON: {{"action": "...", "reason": "...", "confidence": 0.0-1.0}}"""
                 else:
                     # 向后兼容：如果没有传入 retriever，创建临时实例
                     from agents import RetrieverAgent
-                    retriever = RetrieverAgent(memory_path="critic/TableFV/tools/few_shot_critic.json")
+                    retriever = RetrieverAgent(memory_path="critic/TableQA/tools/few_shot_critic.json")
                     result = retriever.retrieve_by_route(state.error_route)
                 
                 # 存储完整结果到 state，避免后续重复检索
@@ -511,7 +511,7 @@ class ActionExecutor:
         from agents import RetrieverAgent
         self.retriever = RetrieverAgent(
             llm=llm,
-            memory_path="critic/TableFV/tools/few_shot_critic.json"
+            memory_path="critic/TableQA/tools/few_shot_critic.json"
         )
     
     def execute(self, state: ControllerState, decision: Decision) -> ControllerState:
@@ -531,7 +531,7 @@ class ActionExecutor:
             return state
         
         elif action == ControllerAction.EXECUTE_TREE:
-            from critic.TableFV.tools import tree_exec_one_sample
+            from critic.TableQA.tools import tree_exec_one_sample
             tree_sample = tree_exec_one_sample(
                 state.sample, 
                 llm=self.llm, 
@@ -543,7 +543,7 @@ class ActionExecutor:
             state.sample = tree_sample
         
         elif action in [ControllerAction.DIAGNOSE_BP, ControllerAction.DIAGNOSE_FS]:
-            from critic.TableFV.tools import critic_exec_one_sample
+            from critic.TableQA.tools import critic_exec_one_sample
             blueprint_only = (action == ControllerAction.DIAGNOSE_BP)
             error_route = state.error_route or "random"
             
@@ -602,8 +602,8 @@ class ActionExecutor:
             state.sample = critic_sample
         
         elif action == ControllerAction.REFINE_CHAIN:
-            from refine.TableFV.utils.chain import dynamic_chain_exec_one_sample
-            from refine.TableFV.utils.extract_step import return_incorrect_max_step
+            from refine.TableQA.utils.chain import dynamic_chain_exec_one_sample
+            from refine.TableQA.utils.extract_step import return_incorrect_max_step
             incorrect_step, max_step = return_incorrect_max_step(state.sample)
             refine_sample = dynamic_chain_exec_one_sample(
                 state.sample,
@@ -616,7 +616,7 @@ class ActionExecutor:
             state.sample = refine_sample
         
         elif action == ControllerAction.REFINE_QUERY:
-            from refine.TableFV.utils.chain import simple_query_with_critic, get_table_info
+            from refine.TableQA.utils.chain import simple_query_with_critic, get_table_info
             table_info = get_table_info(
                 state.sample,
                 skip_op=[],
@@ -631,7 +631,7 @@ class ActionExecutor:
             state.sample = refine_sample
         
         elif action == ControllerAction.UPDATE_TREE:
-            from critic.TableFV.tools import update_error_tree
+            from critic.TableQA.tools import update_error_tree
             # 调试信息
             print(f"[DEBUG UPDATE_TREE] error_route: {state.error_route}")
             print(f"[DEBUG UPDATE_TREE] sample keys: {list(state.sample.keys())}")
@@ -642,7 +642,7 @@ class ActionExecutor:
             update_error_tree(
                 state.sample,
                 state.error_route or "random",
-                error_tree_json="critic/TableFV/tools/few_shot_critic.json",
+                error_tree_json="critic/TableQA/tools/few_shot_critic.json",
                 llm=self.llm,
                 llm_options=self.llm_options,
                 lock=nullcontext()
@@ -717,7 +717,7 @@ def controller_main_loop(
                     print(f"[CACHE] Failed to load cache: {e}, re-executing...")
     
     # 首先调用 Judge 判断初始状态是否正确
-    from critic.TableFV.tools import judge_exec_one_sample
+    from critic.TableQA.tools import judge_exec_one_sample
     judge_sample = judge_exec_one_sample(
         sample,
         llm=llm,
@@ -833,7 +833,7 @@ def controller_main_loop(
         
         # REFINE_CHAIN/REFINE_QUERY 后：使用 Judge 检查
         if decision.action in [ControllerAction.REFINE_CHAIN, ControllerAction.REFINE_QUERY]:
-            from critic.TableFV.tools import judge_exec_one_sample
+            from critic.TableQA.tools import judge_exec_one_sample
             judge_sample = judge_exec_one_sample(
                 state.sample,
                 llm=llm,

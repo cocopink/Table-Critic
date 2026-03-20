@@ -127,10 +127,10 @@ def main(
         
         # Process samples with controller
         refined_samples = []
-        for sample in all_samples:
-            sample_id = sample.get('id', 'unknown')
+        for idx, sample in enumerate(all_samples):
+            sample_id = sample.get('id', idx)
             
-            # Use Controller main loop
+            # Use Controller main loop with cache support
             refined_sample = controller_main_loop(
                 sample,
                 llm=gpt_llm,
@@ -139,12 +139,10 @@ def main(
                     per_example_max_decode_steps=2048,
                     per_example_top_p=1
                 ),
-                max_iterations=2
+                max_iterations=2,
+                cache_dir=cache_dir,
+                sample_idx=idx
             )
-            
-            # Save to cache
-            cache_path = os.path.join(cache_dir, f'case_{sample_id}.pkl')
-            pickle.dump(refined_sample, open(cache_path, 'wb'))
             
             refined_samples.append(refined_sample)
         

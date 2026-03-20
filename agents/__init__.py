@@ -9,6 +9,7 @@ from .critic_agent import CriticAgent
 from .refiner_agent import RefinerAgent
 from .validator_agent import ValidatorAgent
 from .curator_agent import CuratorAgent
+from .retriever_agent import RetrieverAgent
 from .multi_agent_framework import (
     MultiAgentOrchestrator,
     BaseAgent,
@@ -26,6 +27,7 @@ __all__ = [
     'RefinerAgent',
     'ValidatorAgent',
     'CuratorAgent',
+    'RetrieverAgent',
     'MultiAgentOrchestrator',
     'BaseAgent',
     'AgentType',
