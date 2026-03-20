@@ -1,10 +1,12 @@
-base_url=''
-openai_api_key=''
+base_url='https://api.holdai.top/v1'
+openai_api_key=$(cat api.txt)
 model_name='qwen2.5-72b-instruct'
-first_n=-1
+first_n=100
+n_proc=8
+chunk_size=4
 
-thought_results_dir='results/thought/tabfact'
-refine_results='results/refine/tabfact'
+thought_results_dir="results/thought_100/tabfact/${model_name}"
+refine_results="results/refine_100/tabfact/${model_name}"
 
 
 python thought/TableFV/main.py \
@@ -30,3 +32,4 @@ if [ $? -ne 0 ]; then
     echo "Error in refine/TableFV/main_tree_based.py"
     exit 1
 fi
+z

@@ -662,7 +662,7 @@ def dynamic_chain_exec_one_sample(
                     temperature=0.5,
                     per_example_max_decode_steps=150,
                     per_example_top_p=1.0,
-                    n_sample=8,
+                    n_sample=4,
                 ),
             ),
             "select_column": (
@@ -673,7 +673,7 @@ def dynamic_chain_exec_one_sample(
                     temperature=0.5,
                     per_example_max_decode_steps=150,
                     per_example_top_p=1.0,
-                    n_sample=8,
+                    n_sample=4,
                 ),
             ),
             "group_column": (
@@ -889,7 +889,7 @@ def _critic_refine_with_cache_mp_core(arg):
                 while(critic_sample['conclusion'] != '[Correct]' and loop_count < 5):
                     incorrect_step, max_step = return_incorrect_max_step(critic_sample)
                     if incorrect_step:
-                        if incorrect_step != max_step:      # Error occurred while dynamically generating table
+                        if incorrect_step != max_step:      # Error occurred while dynamically generating table不是最后一步出错
                             refine_chain_sample = dynamic_chain_exec_one_sample(
                                 critic_sample, llm=llm, incorrect_step=incorrect_step, max_step=max_step, llm_options=llm_options, strategy=strategy
                             )
@@ -899,7 +899,7 @@ def _critic_refine_with_cache_mp_core(arg):
                                 first_n_op=None,
                             )
                             proc_sample = simple_query_cot_original(refine_chain_sample, table_info, llm, llm_options=llm.get_model_options(temperature=0, per_example_max_decode_steps=200, per_example_top_p=1.0))
-                        else:
+                        else:#重新执行最后一步
                             wo_query_sample = copy.deepcopy(sample)
                             wo_query_sample['chain'] = wo_query_sample['chain'][:-1]
                             table_info = get_table_info(

@@ -55,6 +55,7 @@ class LLM:
         client = OpenAI(
             api_key=self.key,
             base_url=self.base,
+            timeout=600.0,  # 10分钟超时，适应单线程处理
         )
         while gpt_responses is None:
             try:
@@ -83,6 +84,17 @@ class LLM:
                 retry_num += 1
         if error:
             raise Exception(error)
+        
+        # 检查响应是否包含错误
+        if hasattr(gpt_responses, 'error'):
+            print(f"API返回错误: {gpt_responses.error}", flush=True)
+            raise Exception(f"API Error: {gpt_responses.error}")
+        
+        # 检查是否有 choices 字段
+        if not hasattr(gpt_responses, 'choices') or not gpt_responses.choices:
+            print(f"API响应无效: {gpt_responses}", flush=True)
+            raise Exception("Invalid API response: no choices")
+        
         results = []
         for i, res in enumerate(gpt_responses.choices):
             text = res.message.content
@@ -110,6 +122,7 @@ class LLM:
         client = OpenAI(
             api_key=self.key,
             base_url=self.base,
+            timeout=600.0,  # 10分钟超时，适应单线程处理
         )
         while gpt_responses is None:
             try:
@@ -138,6 +151,17 @@ class LLM:
                 retry_num += 1
         if error:
             raise Exception(error)
+        
+        # 检查响应是否包含错误
+        if hasattr(gpt_responses, 'error'):
+            print(f"API返回错误: {gpt_responses.error}", flush=True)
+            raise Exception(f"API Error: {gpt_responses.error}")
+        
+        # 检查是否有 choices 字段
+        if not hasattr(gpt_responses, 'choices') or not gpt_responses.choices:
+            print(f"API响应无效: {gpt_responses}", flush=True)
+            raise Exception("Invalid API response: no choices")
+        
         results = []
         for i, res in enumerate(gpt_responses.choices):
             text = res.message.content

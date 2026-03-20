@@ -5,16 +5,16 @@ import fire
 import os
 
 from tools import read_pkl, get_table_log, get_cot_for_critic, get_critique_with_mp
-from thought.TableFV.utils.llm import ChatGPT, LLM
+from thought.TableFV.utils.llm import LLM
 
 
 
 def main(
     thought_results_dir: str = "results/thought/tabfact",
     critic_results_dir: str = "results/critic/tabfact",
-    base_url="",
-    openai_api_key="EMPTY",
-    model_name="qwen2.5-72b-instruct",
+    base_url="http://localhost:11434/v1",
+    openai_api_key="ollama",
+    model_name="qwen3:30b",
     first_n=-1,
     n_proc=1,
     chunk_size=1,

@@ -3,3 +3,4 @@ results/
 venv_shared_deepsearcher/
 *.log
 __pycache__/
+api.txt

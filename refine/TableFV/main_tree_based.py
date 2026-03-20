@@ -10,7 +10,7 @@ from utils.extract_step import return_incorrect_max_step
 from utils.llm import LLM
 from utils.helper import *
 from utils.evaluate import *
-from utils.chain import *
+from utils.chain import judge_critic_refine_with_cache_mp
 from operations import *
 from tools import read_pkl, critic_tree_init
 

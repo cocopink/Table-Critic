@@ -18,13 +18,14 @@ import fire
 import os
 import sys
 sys.path.append('thought/TableFV')
-
+sys.path.append('critic/TableFV')
 from utils.load_data import load_tabfact_dataset
 from utils.llm import LLM
 from utils.helper import *
 from utils.evaluate import *
 from utils.chain import *
 from operations import *
+from tools.read_pkl import read_pkl
 
 
 def main(
@@ -69,11 +70,22 @@ def main(
             ),
         ),
     ]
-    final_result, _ = fixed_chain_exec_mp(gpt_llm, proc_samples, fixed_chain, n_proc=4, chunk_size=2)
+    
+    final_path = os.path.join(thought_results_dir, "final_result.pkl")
+    if os.path.exists(final_path):
+        final_result = read_pkl(final_path)
+    else:
+        final_result, _ = fixed_chain_exec_mp(gpt_llm, proc_samples, fixed_chain, n_proc=4, chunk_size=2)
 
-    pickle.dump(
-        final_result, open(os.path.join(thought_results_dir, "final_result.pkl"), "wb")
-    )
+        pickle.dump(
+            final_result, open(os.path.join(thought_results_dir, "final_result.pkl"), "wb")
+        )
+        
+    from utils.evaluate import tabfact_match_func_for_samples
+    acc = tabfact_match_func_for_samples(final_result)
+    print(f"Thought Stage Accuracy: {acc}")
+    with open(os.path.join(thought_results_dir, "acc.txt"), "w") as f:
+        f.write(f"Thought Stage Accuracy: {acc}\n")
 
 
 if __name__ == "__main__":

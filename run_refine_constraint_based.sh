@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ========================================
-# Table-Critic Ollama 驱动运行脚本
-# 根据 demo0109.py 中的本地 LLM API 调用方式设计
+# Table-Critic Refine Constraint-Based 运行脚本
+# 基于约束诱导式剪枝推理的 Refine 阶段
 # ========================================
 
 # 颜色输出
@@ -17,21 +17,28 @@ OLLAMA_API_BASE="${OLLAMA_HOST}/v1"
 OLLAMA_API_KEY="ollama"
 
 # 默认模型（可通过参数修改）
-DEFAULT_MODEL="qwen3:14b"
+DEFAULT_MODEL="qwen3:32b"
 
 # 数据处理参数
 FIRST_N=-1
 N_PROC=1
 CHUNK_SIZE=1
 
+# 约束推理参数
+MAX_ROUNDS=5
+STRATEGY="top"
+TEMPERATURE=0.5
+USE_CACHE=true
+CLEAR_CACHE=false
+
 # 任务类型（FV 或 QA）
 TASK_TYPE=""
 
-# 结果目录配置
-THOUGHT_RESULTS_FV='results/thought/tabfact'
-REFINE_RESULTS_FV='results/refine/tabfact'
-THOUGHT_RESULTS_QA='results/thought/wikitq'
-REFINE_RESULTS_QA='results/refine/wikitq'
+# 结果目录配置（不包含模型名，将在运行时动态添加）
+BASE_THOUGHT_RESULTS_FV='results/thought/tabfact'
+BASE_REFINE_RESULTS_FV='results/constraint_based/tabfact'
+BASE_THOUGHT_RESULTS_QA='results/thought/wikitq'
+BASE_REFINE_RESULTS_QA='results/constraint_based/wikitq'
 
 # ========================================
 # 函数定义
@@ -40,7 +47,7 @@ REFINE_RESULTS_QA='results/refine/wikitq'
 # 打印帮助信息
 print_help() {
     echo "=========================================="
-    echo "Table-Critic Ollama 驱动运行脚本"
+    echo "Table-Critic Refine Constraint-Based 运行脚本"
     echo "=========================================="
     echo ""
     echo "用法: $0 [选项]"
@@ -51,11 +58,16 @@ print_help() {
     echo "  -n, --first_n NUM    处理前 N 个样本 (默认: -1, 表示全部)"
     echo "  -p, --n_proc NUM     进程数 (默认: 1)"
     echo "  -c, --chunk_size NUM 批次大小 (默认: 1)"
+    echo "  -r, --max_rounds NUM 最大推理轮次 (默认: 5)"
+    echo "  -s, --strategy STRAT  推理策略: top 或 voting (默认: voting)"
+    echo "  --temp FLOAT         温度参数 (默认: 0.5)"
+    echo "  --use-cache          启用缓存 (默认: true)"
+    echo "  --clear-cache        清除缓存后运行 (默认: false)"
     echo "  -h, --help           显示此帮助信息"
     echo ""
     echo "示例:"
-    echo "  $0 -t FV -m qwen2.5:14b"
-    echo "  $0 -t QA -m llama3.1:8b"
+    echo "  $0 -t QA -m qwen2.5:14b"
+    echo "  $0 -t FV -m llama3.1:8b -r 3 -s top"
     echo ""
     echo "常用 Ollama 模型:"
     echo "  - qwen2.5:14b"
@@ -154,131 +166,137 @@ test_ollama_api() {
     fi
 }
 
-# 运行 TableFV 任务
-run_table_fv() {
+# 运行 TableFV Refine Constraint-Based 任务
+run_table_fv_refine() {
     local model=$1
     
+    # 构建包含模型名的结果目录
+    local thought_results_dir="${BASE_THOUGHT_RESULTS_FV}/${model}"
+    local refine_results_dir="${BASE_REFINE_RESULTS_FV}/${model}"
+    
     echo "=========================================="
-    echo "开始运行 TableFV 任务"
+    echo "开始运行 TableFV Refine Constraint-Based 任务"
     echo "=========================================="
     echo "模型: ${model}"
     echo "API 地址: ${OLLAMA_API_BASE}"
+    echo "Thought 结果目录: ${thought_results_dir}"
+    echo "Refine 结果目录: ${refine_results_dir}"
+    echo "最大推理轮次: ${MAX_ROUNDS}"
+    echo "推理策略: ${STRATEGY}"
+    echo "温度参数: ${TEMPERATURE}"
+    echo "使用缓存: ${USE_CACHE}"
+    echo "清除缓存: ${CLEAR_CACHE}"
     echo "=========================================="
     
-    # Thought 阶段
-    echo ""
-    echo "=========================================="
-    echo "TableFV Thought 阶段"
-    echo "=========================================="
-    
-    python thought/TableFV/main.py \
-        --thought_results_dir $THOUGHT_RESULTS_FV \
-        --base_url $OLLAMA_API_BASE \
-        --openai_api_key $OLLAMA_API_KEY \
-        --model_name $model \
-        --first_n $FIRST_N \
-        --n_proc $N_PROC \
-        --chunk_size $CHUNK_SIZE
-    
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}错误: thought/TableFV/main.py 执行失败${NC}"
+    # 检查 Thought 结果是否存在
+    local thought_result_pkl="${thought_results_dir}/final_result.pkl"
+    if [ ! -f "$thought_result_pkl" ]; then
+        echo -e "${RED}错误: Thought 结果文件不存在: ${thought_result_pkl}${NC}"
+        echo "请先运行 Thought 阶段"
         exit 1
     fi
-    
-    echo -e "${GREEN}✓ TableFV Thought 阶段完成${NC}"
+    echo -e "${GREEN}✓ Thought 结果文件存在${NC}"
     
     # Refine 阶段
     echo ""
     echo "=========================================="
-    echo "TableFV Refine 阶段"
+    echo "TableFV Refine Constraint-Based 阶段"
     echo "=========================================="
     
-    python refine/TableFV/main_tree_based.py \
-        --thought_results_dir $THOUGHT_RESULTS_FV \
-        --refine_results_dir $REFINE_RESULTS_FV \
+    python refine/TableQA/main_constraint_based.py \
+        --thought_results_dir $thought_results_dir \
+        --constraint_results_dir $refine_results_dir \
         --base_url $OLLAMA_API_BASE \
         --openai_api_key $OLLAMA_API_KEY \
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
-        --chunk_size $CHUNK_SIZE
+        --chunk_size $CHUNK_SIZE \
+        --max_rounds $MAX_ROUNDS \
+        --strategy $STRATEGY \
+        --temperature $TEMPERATURE \
+        --use_cache $USE_CACHE \
+        --clear_cache $CLEAR_CACHE
     
     if [ $? -ne 0 ]; then
-        echo -e "${RED}错误: refine/TableFV/main_tree_based.py 执行失败${NC}"
+        echo -e "${RED}错误: refine/TableQA/main_constraint_based.py 执行失败${NC}"
         exit 1
     fi
     
-    echo -e "${GREEN}✓ TableFV Refine 阶段完成${NC}"
+    echo -e "${GREEN}✓ TableFV Refine Constraint-Based 阶段完成${NC}"
     
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}TableFV 任务完成！${NC}"
+    echo -e "${GREEN}TableFV Refine Constraint-Based 任务完成！${NC}"
     echo "=========================================="
-    echo "结果目录: ${REFINE_RESULTS_FV}"
+    echo "结果目录: ${refine_results_dir}"
     echo "=========================================="
 }
 
-# 运行 TableQA 任务
-run_table_qa() {
+# 运行 TableQA Refine Constraint-Based 任务
+run_table_qa_refine() {
     local model=$1
     
+    # 构建包含模型名的结果目录
+    local thought_results_dir="${BASE_THOUGHT_RESULTS_QA}/${model}"
+    local refine_results_dir="${BASE_REFINE_RESULTS_QA}/${model}"
+    
     echo "=========================================="
-    echo "开始运行 TableQA 任务"
+    echo "开始运行 TableQA Refine Constraint-Based 任务"
     echo "=========================================="
     echo "模型: ${model}"
     echo "API 地址: ${OLLAMA_API_BASE}"
+    echo "Thought 结果目录: ${thought_results_dir}"
+    echo "Refine 结果目录: ${refine_results_dir}"
+    echo "最大推理轮次: ${MAX_ROUNDS}"
+    echo "推理策略: ${STRATEGY}"
+    echo "温度参数: ${TEMPERATURE}"
+    echo "使用缓存: ${USE_CACHE}"
+    echo "清除缓存: ${CLEAR_CACHE}"
     echo "=========================================="
     
-    # Thought 阶段
-    echo ""
-    echo "=========================================="
-    echo "TableQA Thought 阶段"
-    echo "=========================================="
-    
-    python thought/TableQA/main.py \
-        --thought_results_dir $THOUGHT_RESULTS_QA \
-        --base_url $OLLAMA_API_BASE \
-        --openai_api_key $OLLAMA_API_KEY \
-        --model_name $model \
-        --first_n $FIRST_N \
-        --n_proc $N_PROC \
-        --chunk_size $CHUNK_SIZE
-    
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}错误: thought/TableQA/main.py 执行失败${NC}"
+    # 检查 Thought 结果是否存在
+    local thought_result_pkl="${thought_results_dir}/final_result.pkl"
+    if [ ! -f "$thought_result_pkl" ]; then
+        echo -e "${RED}错误: Thought 结果文件不存在: ${thought_result_pkl}${NC}"
+        echo "请先运行 Thought 阶段"
         exit 1
     fi
-    
-    echo -e "${GREEN}✓ TableQA Thought 阶段完成${NC}"
+    echo -e "${GREEN}✓ Thought 结果文件存在${NC}"
     
     # Refine 阶段
     echo ""
     echo "=========================================="
-    echo "TableQA Refine 阶段"
+    echo "TableQA Refine Constraint-Based 阶段"
     echo "=========================================="
     
-    python refine/TableQA/main_tree_based.py \
-        --thought_results_dir $THOUGHT_RESULTS_QA \
-        --refine_results_dir $REFINE_RESULTS_QA \
+    python refine/TableQA/main_constraint_based.py \
+        --thought_results_dir $thought_results_dir \
+        --constraint_results_dir $refine_results_dir \
         --base_url $OLLAMA_API_BASE \
         --openai_api_key $OLLAMA_API_KEY \
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
-        --chunk_size $CHUNK_SIZE
+        --chunk_size $CHUNK_SIZE \
+        --max_rounds $MAX_ROUNDS \
+        --strategy $STRATEGY \
+        --temperature $TEMPERATURE \
+        --use_cache $USE_CACHE \
+        --clear_cache $CLEAR_CACHE
     
     if [ $? -ne 0 ]; then
-        echo -e "${RED}错误: refine/TableQA/main_tree_based.py 执行失败${NC}"
+        echo -e "${RED}错误: refine/TableQA/main_constraint_based.py 执行失败${NC}"
         exit 1
     fi
     
-    echo -e "${GREEN}✓ TableQA Refine 阶段完成${NC}"
+    echo -e "${GREEN}✓ TableQA Refine Constraint-Based 阶段完成${NC}"
     
     echo ""
     echo "=========================================="
-    echo -e "${GREEN}TableQA 任务完成！${NC}"
+    echo -e "${GREEN}TableQA Refine Constraint-Based 任务完成！${NC}"
     echo "=========================================="
-    echo "结果目录: ${REFINE_RESULTS_QA}"
+    echo "结果目录: ${refine_results_dir}"
     echo "=========================================="
 }
 
@@ -308,6 +326,30 @@ while [[ $# -gt 0 ]]; do
         -c|--chunk_size)
             CHUNK_SIZE="$2"
             shift 2
+            ;;
+        -r|--max_rounds)
+            MAX_ROUNDS="$2"
+            shift 2
+            ;;
+        -s|--strategy)
+            STRATEGY="$2"
+            shift 2
+            ;;
+        --temp)
+            TEMPERATURE="$2"
+            shift 2
+            ;;
+        --use-cache)
+            USE_CACHE="true"
+            shift
+            ;;
+        --no-cache)
+            USE_CACHE="false"
+            shift
+            ;;
+        --clear-cache)
+            CLEAR_CACHE="true"
+            shift
             ;;
         -h|--help)
             print_help
@@ -342,16 +384,28 @@ if [ "$TASK_TYPE" != "FV" ] && [ "$TASK_TYPE" != "QA" ]; then
     exit 1
 fi
 
+# 验证策略参数
+if [ "$STRATEGY" != "top" ] && [ "$STRATEGY" != "voting" ]; then
+    echo -e "${RED}错误: 策略必须是 top 或 voting${NC}"
+    print_help
+    exit 1
+fi
+
 # 开始执行
 echo ""
 echo "=========================================="
-echo "Table-Critic Ollama 驱动"
+echo "Table-Critic Refine Constraint-Based Ollama 驱动"
 echo "=========================================="
 echo "任务类型: ${TASK_TYPE}"
 echo "模型: ${MODEL}"
 echo "处理样本数: ${FIRST_N}"
 echo "进程数: ${N_PROC}"
 echo "批次大小: ${CHUNK_SIZE}"
+echo "最大推理轮次: ${MAX_ROUNDS}"
+echo "推理策略: ${STRATEGY}"
+echo "温度参数: ${TEMPERATURE}"
+echo "使用缓存: ${USE_CACHE}"
+echo "清除缓存: ${CLEAR_CACHE}"
 echo "=========================================="
 echo ""
 
@@ -371,9 +425,9 @@ test_ollama_api "$MODEL"
 
 # 根据任务类型运行
 if [ "$TASK_TYPE" = "FV" ]; then
-    run_table_fv "$MODEL"
+    run_table_fv_refine "$MODEL"
 elif [ "$TASK_TYPE" = "QA" ]; then
-    run_table_qa "$MODEL"
+    run_table_qa_refine "$MODEL"
 fi
 
 echo ""

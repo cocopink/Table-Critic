@@ -1,10 +1,12 @@
-base_url=''
-openai_api_key=''
+base_url='https://api.holdai.top/v1'
+openai_api_key=$(cat api.txt)
 model_name='qwen2.5-72b-instruct'
-first_n=-1
+first_n=100
+n_proc=8
+chunk_size=4
 
-thought_results_dir='results/thought/wikitq'
-refine_results='results/refine/wikitq'
+thought_results_dir="results/thought_100/wikitq/${model_name}"
+refine_results="results/refine_100/wikitq/${model_name}"
 
 
 python thought/TableQA/main.py \

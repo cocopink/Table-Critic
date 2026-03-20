@@ -1,23 +1,32 @@
 #!/bin/bash
 
 # ========================================
-# Table-Critic Ollama 驱动运行脚本
-# 根据 demo0109.py 中的本地 LLM API 调用方式设计
+# Table-Critic vLLM 驱动运行脚本
+# 基于 run_ollama_model.sh 改编
+# 使用 vLLM OpenAI API Server
 # ========================================
+
+# HuggingFace 镜像配置
+export HF_ENDPOINT=https://hf-mirror.com
 
 # 颜色输出
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Ollama 配置
-OLLAMA_HOST="http://localhost:11434"
-OLLAMA_API_BASE="${OLLAMA_HOST}/v1"
-OLLAMA_API_KEY="ollama"
+# vLLM 配置
+VLLM_HOST="0.0.0.0"
+VLLM_PORT="8000"
+VLLM_API_BASE="http://localhost:${VLLM_PORT}/v1"
+VLLM_API_KEY="EMPTY"
 
-# 默认模型（可通过参数修改）
-DEFAULT_MODEL="qwen3:32b"
+# 默认模型（需要预先下载到本地）
+DEFAULT_MODEL="Qwen/Qwen3-14B-Instruct"
+
+# vLLM 并发控制参数
+MAX_NUM_SEQS=16
 
 # 数据处理参数
 FIRST_N=100
@@ -26,6 +35,9 @@ CHUNK_SIZE=1
 
 # 任务类型（FV 或 QA）
 TASK_TYPE=""
+
+# vLLM 服务进程
+VLLM_PID=""
 
 # 结果目录配置（不包含模型名，将在运行时动态添加）
 BASE_THOUGHT_RESULTS_FV='results/thought_100/tabfact'
@@ -40,104 +52,131 @@ BASE_REFINE_RESULTS_QA='results/refine_100/wikitq'
 # 打印帮助信息
 print_help() {
     echo "=========================================="
-    echo "Table-Critic Ollama 驱动运行脚本"
+    echo "Table-Critic vLLM 驱动运行脚本"
     echo "=========================================="
     echo ""
     echo "用法: $0 [选项]"
     echo ""
     echo "选项:"
     echo "  -t, --task TYPE      任务类型: FV (Table Fact Verification) 或 QA (Table Question Answering)"
-    echo "  -m, --model MODEL    Ollama 模型名称 (默认: ${DEFAULT_MODEL})"
-    echo "  -n, --first_n NUM    处理前 N 个样本 (默认: -1, 表示全部)"
+    echo "  -m, --model MODEL    vLLM 模型名称 (默认: ${DEFAULT_MODEL})"
+    echo "  -n, --first_n NUM    处理前 N 个样本 (默认: 100)"
     echo "  -p, --n_proc NUM     进程数 (默认: 1)"
     echo "  -c, --chunk_size NUM 批次大小 (默认: 1)"
+    echo "  -s, --gpus NUM       GPU 数量 (默认: 1)"
+    echo "  --port PORT          vLLM 服务端口 (默认: 8000)"
+    echo "  --max_num_seqs NUM   最大并发序列数 (默认: 16)"
     echo "  -h, --help           显示此帮助信息"
     echo ""
     echo "示例:"
-    echo "  $0 -t FV -m qwen2.5:14b"
-    echo "  $0 -t QA -m llama3.1:8b"
+    echo "  $0 -t FV -m Qwen/Qwen2.5-14B-Instruct"
+    echo "  $0 -t QA -m Qwen/Qwen2.5-7B-Instruct -s 1"
+    echo "  $0 -t FV -m meta-llama/Llama-3.1-8B-Instruct -p 4"
     echo ""
-    echo "常用 Ollama 模型:"
-    echo "  - qwen2.5:14b"
-    echo "  - qwen2.5:7b"
-    echo "  - llama3.1:8b"
-    echo "  - llama3.1:70b"
+    echo "常用 vLLM 模型 (HuggingFace 格式):"
+    echo "  - Qwen/Qwen2.5-14B-Instruct"
+    echo "  - Qwen/Qwen2.5-7B-Instruct"
+    echo "  - meta-llama/Llama-3.1-8B-Instruct"
+    echo "  - meta-llama/Llama-3.1-70B-Instruct"
+    echo "  - mistralai/Mistral-7B-Instruct-v0.2"
     echo ""
-    echo "查看可用模型: ollama list"
-    echo "下载模型: ollama pull <model_name>"
+    echo "模型下载: huggingface-cli download <model_name>"
+    echo "或访问 https://huggingface.co/models"
     echo "=========================================="
 }
 
-# 检查 ollama 是否安装
-check_ollama_installed() {
-    if ! command -v ollama &> /dev/null; then
-        echo -e "${RED}错误: Ollama 未安装${NC}"
-        echo "请访问 https://ollama.com/download 安装 Ollama"
-        exit 1
+# 清理函数
+cleanup() {
+    if [ -n "$VLLM_PID" ]; then
+        echo "正在停止 vLLM 服务 (PID: $VLLM_PID)..."
+        kill $VLLM_PID 2>/dev/null
+        wait $VLLM_PID 2>/dev/null
+        echo -e "${GREEN}✓ vLLM 服务已停止${NC}"
     fi
-    echo -e "${GREEN}✓ Ollama 已安装${NC}"
 }
 
-# 检查 ollama 服务是否运行
-check_ollama_running() {
-    if curl -s "${OLLAMA_HOST}/api/tags" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ Ollama 服务正在运行${NC}"
+# 设置退出时清理
+trap cleanup EXIT
+
+# 检查 vllm 是否安装
+check_vllm_installed() {
+    if ! python -c "import vllm" 2>/dev/null; then
+        echo -e "${RED}错误: vLLM 未安装${NC}"
+        echo "请使用以下命令安装 vLLM:"
+        echo "  pip install vllm"
+        echo ""
+        echo "或参考: https://docs.vllm.ai/en/latest/getting_started/installation.html"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ vLLM 已安装${NC}"
+    
+    # 检查 GPU 可用性
+    if command -v nvidia-smi &> /dev/null; then
+        echo "检测到 NVIDIA GPU:"
+        nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo "  GPU 检测成功"
+    else
+        echo -e "${YELLOW}⚠ 未检测到 NVIDIA GPU，vLLM 需要 GPU 才能运行${NC}"
+    fi
+}
+
+# 检查 vLLM 服务是否运行
+check_vllm_running() {
+    if curl -s "${VLLM_API_BASE}/models" > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ vLLM 服务正在运行${NC}"
         return 0
     else
-        echo -e "${YELLOW}⚠ Ollama 服务未运行${NC}"
+        echo -e "${YELLOW}⚠ vLLM 服务未运行${NC}"
         return 1
     fi
 }
 
-# 启动 ollama 服务
-start_ollama() {
-    echo "正在启动 Ollama 服务..."
-    ollama serve > /dev/null 2>&1 &
-    OLLAMA_PID=$!
+# 启动 vLLM 服务
+start_vllm() {
+    local model=$1
+    local gpus=$2
+    local port=$3
+    
+    echo "正在启动 vLLM 服务..."
+    echo "模型: ${model}"
+    echo "GPU 数量: ${gpus}"
+    echo "端口: ${port}"
+    echo "最大并发序列数: ${MAX_NUM_SEQS}"
+    
+    # 启动 vLLM 服务
+    python -m vllm.entrypoints.openai.api_server \
+        --model "$model" \
+        --host "$VLLM_HOST" \
+        --port "$port" \
+        --gpu-memory-utilization 0.7 \
+        --tensor-parallel-size "$gpus" \
+        --max-num-seqs "$MAX_NUM_SEQS" \
+        > /tmp/vllm.log 2>&1 &
+    
+    VLLM_PID=$!
     
     # 等待服务启动
-    echo "等待 Ollama 服务启动..."
-    for i in {1..30}; do
-        if curl -s "${OLLAMA_HOST}/api/tags" > /dev/null 2>&1; then
-            echo -e "${GREEN}✓ Ollama 服务启动成功 (PID: ${OLLAMA_PID})${NC}"
+    echo "等待 vLLM 服务启动..."
+    for i in {1..60}; do
+        if curl -s "${VLLM_API_BASE}/models" > /dev/null 2>&1; then
+            echo -e "${GREEN}✓ vLLM 服务启动成功 (PID: ${VLLM_PID})${NC}"
             return 0
         fi
-        sleep 1
+        sleep 2
     done
     
-    echo -e "${RED}错误: Ollama 服务启动超时${NC}"
+    echo -e "${RED}错误: vLLM 服务启动超时${NC}"
+    echo "请检查日志: tail -f /tmp/vllm.log"
     exit 1
 }
 
-# 检查模型是否存在
-check_model() {
+# 测试 vLLM API 连接
+test_vllm_api() {
     local model=$1
-    echo "检查模型: ${model}"
+    echo "测试 vLLM API 连接..."
     
-    local model_list=$(ollama list 2>&1)
-    if echo "$model_list" | grep -q "$model"; then
-        echo -e "${GREEN}✓ 模型 ${model} 已存在${NC}"
-        return 0
-    else
-        echo -e "${YELLOW}⚠ 模型 ${model} 不存在${NC}"
-        echo "正在下载模型 ${model}..."
-        if ollama pull "$model"; then
-            echo -e "${GREEN}✓ 模型 ${model} 下载成功${NC}"
-            return 0
-        else
-            echo -e "${RED}错误: 模型 ${model} 下载失败${NC}"
-            exit 1
-        fi
-    fi
-}
-
-# 测试 Ollama API 连接
-test_ollama_api() {
-    local model=$1
-    echo "测试 Ollama API 连接..."
-    
-    local response=$(curl -s "${OLLAMA_API_BASE}/chat/completions" \
+    local response=$(curl -s "${VLLM_API_BASE}/chat/completions" \
         -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${VLLM_API_KEY}" \
         -d "{
             \"model\": \"${model}\",
             \"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}],
@@ -145,10 +184,10 @@ test_ollama_api() {
         }")
     
     if echo "$response" | grep -q "content"; then
-        echo -e "${GREEN}✓ Ollama API 连接成功${NC}"
+        echo -e "${GREEN}✓ vLLM API 连接成功${NC}"
         return 0
     else
-        echo -e "${RED}错误: Ollama API 连接失败${NC}"
+        echo -e "${RED}错误: vLLM API 连接失败${NC}"
         echo "响应: $response"
         exit 1
     fi
@@ -166,7 +205,7 @@ run_table_fv() {
     echo "开始运行 TableFV 任务"
     echo "=========================================="
     echo "模型: ${model}"
-    echo "API 地址: ${OLLAMA_API_BASE}"
+    echo "API 地址: ${VLLM_API_BASE}"
     echo "Thought 结果目录: ${thought_results_dir}"
     echo "Refine 结果目录: ${refine_results_dir}"
     echo "=========================================="
@@ -179,8 +218,8 @@ run_table_fv() {
     
     python thought/TableFV/main.py \
         --thought_results_dir $thought_results_dir \
-        --base_url $OLLAMA_API_BASE \
-        --openai_api_key $OLLAMA_API_KEY \
+        --base_url $VLLM_API_BASE \
+        --openai_api_key $VLLM_API_KEY \
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
@@ -202,8 +241,8 @@ run_table_fv() {
     python refine/TableFV/main_tree_based.py \
         --thought_results_dir $thought_results_dir \
         --refine_results_dir $refine_results_dir \
-        --base_url $OLLAMA_API_BASE \
-        --openai_api_key $OLLAMA_API_KEY \
+        --base_url $VLLM_API_BASE \
+        --openai_api_key $VLLM_API_KEY \
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
@@ -236,7 +275,7 @@ run_table_qa() {
     echo "开始运行 TableQA 任务"
     echo "=========================================="
     echo "模型: ${model}"
-    echo "API 地址: ${OLLAMA_API_BASE}"
+    echo "API 地址: ${VLLM_API_BASE}"
     echo "Thought 结果目录: ${thought_results_dir}"
     echo "Refine 结果目录: ${refine_results_dir}"
     echo "=========================================="
@@ -249,8 +288,8 @@ run_table_qa() {
     
     python thought/TableQA/main.py \
         --thought_results_dir $thought_results_dir \
-        --base_url $OLLAMA_API_BASE \
-        --openai_api_key $OLLAMA_API_KEY \
+        --base_url $VLLM_API_BASE \
+        --openai_api_key $VLLM_API_KEY \
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
@@ -272,8 +311,8 @@ run_table_qa() {
     python refine/TableQA/main_tree_based.py \
         --thought_results_dir $thought_results_dir \
         --refine_results_dir $refine_results_dir \
-        --base_url $OLLAMA_API_BASE \
-        --openai_api_key $OLLAMA_API_KEY \
+        --base_url $VLLM_API_BASE \
+        --openai_api_key $VLLM_API_KEY \
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
@@ -299,6 +338,7 @@ run_table_qa() {
 # ========================================
 
 # 解析命令行参数
+GPUS=1
 while [[ $# -gt 0 ]]; do
     case $1 in
         -t|--task)
@@ -319,6 +359,19 @@ while [[ $# -gt 0 ]]; do
             ;;
         -c|--chunk_size)
             CHUNK_SIZE="$2"
+            shift 2
+            ;;
+        -s|--gpus)
+            GPUS="$2"
+            shift 2
+            ;;
+        --port)
+            VLLM_PORT="$2"
+            VLLM_API_BASE="http://localhost:${VLLM_PORT}/v1"
+            shift 2
+            ;;
+        --max_num_seqs)
+            MAX_NUM_SEQS="$2"
             shift 2
             ;;
         -h|--help)
@@ -357,29 +410,29 @@ fi
 # 开始执行
 echo ""
 echo "=========================================="
-echo "Table-Critic Ollama 驱动"
+echo "Table-Critic vLLM 驱动"
 echo "=========================================="
 echo "任务类型: ${TASK_TYPE}"
 echo "模型: ${MODEL}"
 echo "处理样本数: ${FIRST_N}"
 echo "进程数: ${N_PROC}"
 echo "批次大小: ${CHUNK_SIZE}"
+echo "GPU 数量: ${GPUS}"
+echo "最大并发序列数: ${MAX_NUM_SEQS}"
+echo "API 地址: ${VLLM_API_BASE}"
 echo "=========================================="
 echo ""
 
-# 检查 Ollama
-check_ollama_installed
+# 检查 vLLM
+check_vllm_installed
 
-# 检查并启动 Ollama 服务
-if ! check_ollama_running; then
-    start_ollama
+# 检查并启动 vLLM 服务
+if ! check_vllm_running; then
+    start_vllm "$MODEL" "$GPUS" "$VLLM_PORT"
 fi
 
-# 检查模型
-check_model "$MODEL"
-
 # 测试 API 连接
-test_ollama_api "$MODEL"
+test_vllm_api "$MODEL"
 
 # 根据任务类型运行
 if [ "$TASK_TYPE" = "FV" ]; then
