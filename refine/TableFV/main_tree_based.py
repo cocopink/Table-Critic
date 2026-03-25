@@ -3,6 +3,7 @@ import subprocess
 import fire
 import os
 import sys
+from tqdm import tqdm
 sys.path.append('critic/TableFV')
 sys.path.append('refine/TableFV')
 sys.path.append('.')
@@ -127,7 +128,7 @@ def main(
         
         # Process samples with controller
         refined_samples = []
-        for idx, sample in enumerate(all_samples):
+        for idx, sample in tqdm(enumerate(all_samples), total=len(all_samples), desc="Controller-based refinement"):
             sample_id = sample.get('id', idx)
             
             # Use Controller main loop with cache support

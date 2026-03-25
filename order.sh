@@ -1,25 +1,26 @@
 #!/bin/bash
 # 顺序执行三个任务，每个任务完成后才启动下一个
-echo "Starting 1 task (FV with qwen3:32b)..."
-nohup ./run_ollama_model.sh -t FV -m qwen3:32b -u False --use_controller  -n -1 -c 8  > logs/mr_0320FV_32b.log 2>&1 &
-pid=$!
-wait $pid
-echo "1 task finished."
+# echo "Starting 1 task (FV with qwen3:32b)..."
+# nohup ./run_ollama_model.sh -t FV -m qwen3:32b -u False --use_controller  -n -1 -c 8  > logs/mr_0320FV_32b.log 2>&1 &
+# pid=$!
+# wait $pid
+# echo "1 task finished."
 
-echo "Starting 2 task (QA with qwen3:32b)..."
-nohup ./run_ollama_model.sh -t QA -m qwen3:32b -u False --use_controller True -n -1 -c 8  > logs/mr_0320QA_32b.log 2>&1 &
-pid=$!
-wait $pid
-echo "2 task finished."
+# echo "Starting 2 task (QA with qwen3:32b)..."
+# nohup ./run_ollama_model.sh -t QA -m qwen3:32b -u False --use_controller True -n -1 -c 8  > logs/mr_0320QA_32b.log 2>&1 &
+# pid=$!
+# wait $pid
+# echo "2 task finished."
+wait 1382181
 
 echo "Starting 3 task (FV with qwen3:14b)..."
-nohup ./run_ollama_model.sh -t FV -m qwen3:14b -u False --use_controller True -n -1 -c 8  > logs/m_0320FV_14b.log 2>&1 &
+nohup ./run_ollama_model.sh -t FV -m qwen3:14b -u False --use_controller True -n -1 -c 8  > logs/mr_0320FV_14b.log 2>&1 &
 pid=$!
 wait $pid
 echo "3 task finished."
 
 echo "Starting 4 task (QA with qwen3:14b)..."
-nohup ./run_ollama_model.sh -t QA -m qwen3:14b -u False --use_controller True -n -1 -c 8  > logs/m_0320QA_14b.log 2>&1 &
+nohup ./run_ollama_model.sh -t QA -m qwen3:14b -u False --use_controller True -n -1 -c 8  > logs/mr_0320QA_14b.log 2>&1 &
 pid=$!
 wait $pid
 echo "4 task finished."

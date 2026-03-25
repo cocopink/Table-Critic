@@ -602,7 +602,8 @@ class ActionExecutor:
             state.sample = critic_sample
         
         elif action == ControllerAction.REFINE_CHAIN:
-            from refine.TableFV.utils.chain import dynamic_chain_exec_one_sample
+            from refine.TableFV.utils.chain import dynamic_chain_exec_one_sample, get_table_info
+            from refine.TableFV.operations.final_query import simple_query_cot_original
             from refine.TableFV.utils.extract_step import return_incorrect_max_step
             incorrect_step, max_step = return_incorrect_max_step(state.sample)
             refine_sample = dynamic_chain_exec_one_sample(
@@ -613,6 +614,40 @@ class ActionExecutor:
                 llm_options=self.llm_options,
                 strategy="top"
             )
+            if DEBUG:
+                print(f"[DEBUG REFINE_CHAIN] After dynamic_chain_exec_one_sample:")
+                print(f"  - chain length: {len(refine_sample.get('chain', []))}")
+                if refine_sample.get('chain'):
+                    last_op = refine_sample['chain'][-1]
+                    print(f"  - last operation: {last_op.get('operation_name', 'N/A')}")
+                    has_query = 'query' in last_op.get('operation_name', '').lower()
+                    print(f"  - has query operation: {has_query}")
+            
+            # 修复：添加 query 操作
+            # dynamic_chain_exec_one_sample 只生成中间操作，不包含 query 操作
+            # 需要调用 simple_query_cot_original 添加最终的 query 操作
+            table_info = get_table_info(
+                refine_sample,
+                skip_op=[],
+                first_n_op=None,
+            )
+            if DEBUG:
+                print(f"[DEBUG REFINE_CHAIN] Adding query operation...")
+            refine_sample = simple_query_cot_original(
+                refine_sample,
+                table_info,
+                self.llm,
+                debug=DEBUG,
+                use_demo=True,
+                llm_options=self.llm.get_model_options(temperature=0, per_example_max_decode_steps=2048, per_example_top_p=1.0)
+            )
+            if DEBUG:
+                print(f"[DEBUG REFINE_CHAIN] After adding query operation:")
+                print(f"  - chain length: {len(refine_sample.get('chain', []))}")
+                if refine_sample.get('chain'):
+                    last_op = refine_sample['chain'][-1]
+                    print(f"  - last operation: {last_op.get('operation_name', 'N/A')}")
+            
             state.sample = refine_sample
         
         elif action == ControllerAction.REFINE_QUERY:

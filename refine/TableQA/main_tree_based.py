@@ -3,6 +3,7 @@ import subprocess
 import fire
 import os
 import sys
+from tqdm import tqdm
 import copy
 sys.path.append('critic/TableQA')
 sys.path.append('refine/TableQA')
@@ -125,11 +126,11 @@ def main(
         print("Using controller-based refinement...")
         
         # Initialize critic tree
-        critic_tree_init(file_path="critic/TableQA/tools/few_shot_critic.json")
+        # critic_tree_init(file_path="critic/TableQA/tools/few_shot_critic.json")
         
         # Process samples with controller
         refined_samples = []
-        for idx, sample in enumerate(all_samples):
+        for idx, sample in tqdm(enumerate(all_samples), total=len(all_samples), desc="Controller-based refinement"):
             sample_id = sample.get('id', idx)
             
             # Use Controller main loop with cache support

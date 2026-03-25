@@ -201,6 +201,21 @@ def get_cot_for_judge(sample):
 
     table_log, thought_log = get_table_log(sample)
 
+    # Debug: Check if cotable_result exists in the last table_log entry
+    if 'cotable_result' not in table_log[-1]:
+        print(f"[DEBUG get_cot_for_judge] ERROR: 'cotable_result' not found in table_log[-1]")
+        print(f"  - table_log length: {len(table_log)}")
+        print(f"  - table_log[-1] keys: {list(table_log[-1].keys())}")
+        print(f"  - chain length: {len(sample.get('chain', []))}")
+        if sample.get('chain'):
+            print(f"  - chain operations:")
+            for i, op in enumerate(sample['chain']):
+                print(f"    [{i}] {op.get('operation_name', 'N/A')}")
+            last_op = sample['chain'][-1]
+            print(f"  - last operation: {last_op.get('operation_name', 'N/A')}")
+            has_query = 'query' in last_op.get('operation_name', '').lower()
+            print(f"  - last operation is query: {has_query}")
+
     cotable_result = table_log[-1]["cotable_result"]
     if isinstance(cotable_result, dict):
         cotable_result = str(cotable_result)
