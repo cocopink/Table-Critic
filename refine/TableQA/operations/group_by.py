@@ -50,12 +50,13 @@ def group_column_func(
 ):
     table_text = table_info["table_text"]
 
+    table_caption = sample["table_caption"]
     statement = sample["statement"]
     prompt = "" + group_column_demo.rstrip() + "\n\n"
     if critic:
         prompt += critic
     prompt += group_column_build_prompt(
-        table_text, statement, num_rows=5
+        table_text, statement, table_caption=table_caption, num_rows=5
     )
     responses = llm.generate_plus_with_score(
         prompt,

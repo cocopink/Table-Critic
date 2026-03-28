@@ -487,6 +487,364 @@ Output JSON: {{"action": "...", "reason": "...", "confidence": 0.0-1.0}}"""
                 )
 
 
+# ==================== 阶段3：EnhancedController 类 ====================
+
+class EnhancedController(MinimalController):
+    """
+    增强版 Controller
+    
+    在 MinimalController 的基础上添加：
+    - 更智能的决策逻辑
+    - 增强版 prompt 构建（包含更多上下文）
+    - 决策验证机制
+    
+    目标：添加更智能的决策逻辑
+    """
+    
+    def __init__(self, llm, llm_options, max_iterations: int = 2, retriever=None):
+        """
+        初始化增强版 Controller
+        
+        Args:
+            llm: 语言模型实例
+            llm_options: 模型选项
+            max_iterations: 最大迭代次数
+            retriever: RetrieverAgent 实例
+        """
+        super().__init__(llm, llm_options, max_iterations, retriever)
+    
+    def _llm_decide(self, state: ControllerState) -> Decision:
+        """
+        使用增强版 LLM 决策
+        
+        与 MinimalController 的区别：
+        - 使用增强版 prompt（包含更多上下文）
+        - 添加决策验证机制
+        
+        Args:
+            state: 当前状态
+            
+        Returns:
+            Decision: 决策结果
+        """
+        try:
+            # 根据上一步动作决定 LLM 决策类型
+            if state.last_action == ControllerAction.EXECUTE_TREE.value or state.last_action == "INIT":
+                # EXECUTE_TREE 后：决定 DIAGNOSE_BP 还是 DIAGNOSE_FS
+                return self._llm_decide_diagnose_enhanced(state)
+            elif state.last_action in [ControllerAction.DIAGNOSE_BP.value, ControllerAction.DIAGNOSE_FS.value]:
+                # DIAGNOSE 后：决定 REFINE_CHAIN 还是 REFINE_QUERY
+                return self._llm_decide_refine_enhanced(state)
+            else:
+                # 默认使用规则决策
+                return self._default_decision(state)
+        except Exception as e:
+            # LLM 决策失败时，直接停止流程
+            print(f"[EnhancedController] LLM decision failed: {e}, stopping flow")
+            return Decision(
+                action=ControllerAction.STOP,
+                reason=f"LLM decision failed: {e}",
+                confidence=0.0,
+                source="llm"
+            )
+    
+    def _llm_decide_diagnose_enhanced(self, state: ControllerState) -> Decision:
+        """
+        使用增强版 LLM 决定下一步是 DIAGNOSE_BP 还是 DIAGNOSE_FS
+        
+        与 MinimalController 的区别：
+        - 使用 _build_enhanced_prompt 构建更丰富的上下文
+        - 使用 _validate_decision 验证决策的合理性
+        
+        Args:
+            state: 当前状态
+            
+        Returns:
+            Decision: 决策结果
+        """
+        # 构建增强版 prompt
+        prompt = self._build_enhanced_prompt(state, decision_type="diagnose")
+        
+        try:
+            response = self.llm.generate(
+                prompt,
+                options=self.llm_options
+            )
+            decision_data = json.loads(response)
+            
+            # 验证决策
+            return self._validate_decision(decision_data, state, decision_type="diagnose")
+            
+        except Exception as e:
+            # Fallback: 使用规则
+            print(f"[EnhancedController] LLM diagnose decision failed: {e}, using rule-based decision")
+            if ControllerAction.DIAGNOSE_BP.value not in state.action_history:
+                return Decision(
+                    action=ControllerAction.DIAGNOSE_BP,
+                    reason="First diagnose: use blueprint mode",
+                    confidence=0.9,
+                    source="rule"
+                )
+            else:
+                return Decision(
+                    action=ControllerAction.DIAGNOSE_FS,
+                    reason="Blueprint mode done: use few-shot mode",
+                    confidence=0.8,
+                    source="rule"
+                )
+    
+    def _llm_decide_refine_enhanced(self, state: ControllerState) -> Decision:
+        """
+        使用增强版 LLM 决定下一步是 REFINE_CHAIN 还是 REFINE_QUERY
+        
+        与 MinimalController 的区别：
+        - 使用 _build_enhanced_prompt 构建更丰富的上下文
+        - 使用 _validate_decision 验证决策的合理性
+        
+        Args:
+            state: 当前状态
+            
+        Returns:
+            Decision: 决策结果
+        """
+        # 构建增强版 prompt
+        prompt = self._build_enhanced_prompt(state, decision_type="refine")
+        
+        try:
+            response = self.llm.generate(
+                prompt,
+                options=self.llm_options
+            )
+            decision_data = json.loads(response)
+            
+            # 验证决策
+            return self._validate_decision(decision_data, state, decision_type="refine")
+            
+        except Exception as e:
+            # Fallback: 使用规则
+            print(f"[EnhancedController] LLM refine decision failed: {e}, using rule-based decision")
+            from refine.TableFV.utils.extract_step import return_incorrect_max_step
+            incorrect_step, max_step = return_incorrect_max_step(state.sample)
+            if incorrect_step and incorrect_step != max_step:
+                return Decision(
+                    action=ControllerAction.REFINE_CHAIN,
+                    reason="Error in reasoning chain (incorrect_step != max_step), refine chain",
+                    confidence=0.9,
+                    source="rule"
+                )
+            else:
+                return Decision(
+                    action=ControllerAction.REFINE_QUERY,
+                    reason="Error in final query (incorrect_step == max_step), refine query",
+                    confidence=0.9,
+                    source="rule"
+                )
+    
+    def _build_enhanced_prompt(self, state: ControllerState, decision_type: str) -> str:
+        """
+        构建增强版 prompt
+        
+        与 MinimalController 的区别：
+        - 包含更多上下文信息
+        - 包含检索结果（blueprint 和 few-shot 示例）
+        - 包含决策指南
+        
+        Args:
+            state: 当前状态
+            decision_type: 决策类型 ("diagnose" 或 "refine")
+            
+        Returns:
+            str: 增强版 prompt
+        """
+        # 获取检索结果
+        retrieval_info = ""
+        if state.error_route and not state.retrieval_info:
+            try:
+                if self.retriever is not None:
+                    result = self.retriever.retrieve_by_route(state.error_route)
+                else:
+                    from agents import RetrieverAgent
+                    retriever = RetrieverAgent(memory_path="critic/TableFV/tools/few_shot_critic.json")
+                    result = retriever.retrieve_by_route(state.error_route)
+                
+                # 存储完整结果到 state
+                state.retrieved_blueprints = result.get('blueprint')
+                state.retrieved_few_shot_examples = result.get('few_shot_examples', [])
+                
+                if result.get('blueprint'):
+                    retrieval_info = f"\n- Blueprint available: {result['blueprint']}..."
+                if result.get('few_shot_examples'):
+                    retrieval_info += f"\n- Few-shot examples available: {len(result['few_shot_examples'])} examples"
+                state.retrieval_info = retrieval_info
+                
+                if DEBUG:
+                    few_shot_count = len(state.retrieved_few_shot_examples) if state.retrieved_few_shot_examples else 0
+                    print(f"[DEBUG ENHANCED] Stored retrieved data in state:")
+                    print(f"  - Blueprint: {state.retrieved_blueprints is not None}")
+                    print(f"  - Few-shot count: {few_shot_count}")
+            except Exception as e:
+                print(f"[ERROR] RetrieverAgent error in _build_enhanced_prompt: {e}", flush=True)
+        
+        # 使用已存储的检索信息
+        retrieval_info = state.retrieval_info or ""
+        
+        # 获取诊断信息（仅用于 refine 决策）
+        diagnosis_info = ""
+        if decision_type == "refine" and state.diagnosis:
+            try:
+                from refine.TableFV.utils.extract_step import return_incorrect_max_step
+                incorrect_step, max_step = return_incorrect_max_step(state.sample)
+                diagnosis_info = f"""
+- Diagnosis conclusion: {state.diagnosis.get("conclusion", "N/A")}
+- Incorrect step: {incorrect_step}
+- Max step: {max_step}"""
+            except Exception as e:
+                # 如果获取失败，只使用诊断结论
+                diagnosis_info = f"""
+- Diagnosis conclusion: {state.diagnosis.get("conclusion", "N/A")}"""
+                if DEBUG:
+                    print(f"[DEBUG ENHANCED] Failed to get incorrect/max_step: {e}")
+            if retrieval_info:
+                # 将 "Blueprint" 改为 "Error blueprint" 以适应refine上下文
+                retrieval_info = retrieval_info.replace("- Blueprint available:", "- Error blueprint:")
+        
+        # 构建 prompt
+        prompt = f"""You are a reasoning controller. Decide the next action.
+
+Current State:
+- Question: {state.question}
+- Iteration: {state.iteration}
+- Last action: {state.last_action}
+- Error route: {state.error_route or "N/A"}
+- Has been diagnosed with blueprint: {ControllerAction.DIAGNOSE_BP.value in state.action_history}{retrieval_info}{diagnosis_info}
+
+"""
+        
+        if decision_type == "diagnose":
+            prompt += """Available Actions:
+- DIAGNOSE_BP: Diagnose error using blueprint only (faster, less context)
+- DIAGNOSE_FS: Diagnose error using blueprint + few-shot examples (slower, more context)
+
+Decision Guidelines:
+1. First iteration after EXECUTE_TREE: Always start with DIAGNOSE_BP
+2. If DIAGNOSE_BP failed or you need more context: Use DIAGNOSE_FS
+3. Max iterations: {max_iterations}
+
+Output JSON: {{"action": "...", "reason": "...", "confidence": 0.0-1.0}}""".format(max_iterations=self.max_iterations)
+        
+        elif decision_type == "refine":
+            prompt += """Available Actions:
+- REFINE_CHAIN: Refine reasoning chain from error step (if error is in reasoning chain)
+- REFINE_QUERY: Refine only the final query (if error is only in final query)
+
+Decision Guidelines:
+1. If incorrect_step != max_step: Error is in reasoning chain, use REFINE_CHAIN
+2. If incorrect_step == max_step: Error is only in final query, use REFINE_QUERY
+3. Max iterations: {max_iterations}
+
+Output JSON: {{"action": "...", "reason": "...", "confidence": 0.0-1.0}}""".format(max_iterations=self.max_iterations)
+        
+        return prompt
+    
+    def _validate_decision(
+        self, 
+        decision_data: Dict, 
+        state: ControllerState,
+        decision_type: str
+    ) -> Decision:
+        """
+        验证 LLM 决策的合理性
+        
+        规则验证：
+        - 第一次必须执行 tree（iteration=0, last_action=INIT）
+        - 没有 error_route 不能诊断
+        - 没有诊断不能精炼
+        - 不正确不能更新树
+        
+        Args:
+            decision_data: LLM 返回的决策数据
+            state: 当前状态
+            decision_type: 决策类型 ("diagnose" 或 "refine")
+            
+        Returns:
+            Decision: 验证后的决策
+        """
+        action_str = decision_data.get("action", "")
+        
+        # 规则验证
+        if decision_type == "diagnose":
+            # 验证诊断决策
+            if state.error_route is None and action_str.startswith("DIAGNOSE"):
+                # 没有 error_route 不能诊断
+                print(f"[EnhancedController] Cannot diagnose without error_route, forcing EXECUTE_TREE")
+                decision_data["action"] = "EXECUTE_TREE"
+                decision_data["reason"] = "Need error_route before diagnosis"
+            
+            elif ControllerAction.DIAGNOSE_BP.value in state.action_history and action_str == "DIAGNOSE_BP":
+                # 已经尝试过 DIAGNOSE_BP，应该尝试 DIAGNOSE_FS
+                print(f"[EnhancedController] Already tried DIAGNOSE_BP, forcing DIAGNOSE_FS")
+                decision_data["action"] = "DIAGNOSE_FS"
+                decision_data["reason"] = "Already tried blueprint mode, use few-shot mode"
+        
+        elif decision_type == "refine":
+            # 验证精炼决策
+            if state.diagnosis is None and action_str.startswith("REFINE"):
+                # 没有诊断不能精炼
+                print(f"[EnhancedController] Cannot refine without diagnosis, forcing DIAGNOSE_BP")
+                decision_data["action"] = "DIAGNOSE_BP"
+                decision_data["reason"] = "Need diagnosis before refinement"
+            
+            elif not state.is_correct and action_str == "UPDATE_TREE":
+                # 不正确不能更新树
+                print(f"[EnhancedController] Cannot update tree with incorrect answer, forcing STOP")
+                decision_data["action"] = "STOP"
+                decision_data["reason"] = "Only update tree with correct answers"
+        
+        # 转换为 ControllerAction
+        action_str = decision_data.get("action", "")
+        action = None
+        
+        if decision_type == "diagnose":
+            if "BP" in action_str.upper() and "FS" not in action_str.upper():
+                action = ControllerAction.DIAGNOSE_BP
+            elif "FS" in action_str.upper():
+                action = ControllerAction.DIAGNOSE_FS
+            elif "TREE" in action_str.upper():
+                action = ControllerAction.EXECUTE_TREE
+            else:
+                # 默认：如果之前没有 DIAGNOSE_BP，使用 DIAGNOSE_BP
+                if ControllerAction.DIAGNOSE_BP.value not in state.action_history:
+                    action = ControllerAction.DIAGNOSE_BP
+                else:
+                    action = ControllerAction.DIAGNOSE_FS
+        
+        elif decision_type == "refine":
+            if "CHAIN" in action_str.upper():
+                action = ControllerAction.REFINE_CHAIN
+            elif "QUERY" in action_str.upper():
+                action = ControllerAction.REFINE_QUERY
+            else:
+                # 默认根据 incorrect_step 决定
+                from refine.TableFV.utils.extract_step import return_incorrect_max_step
+                incorrect_step, max_step = return_incorrect_max_step(state.sample)
+                if incorrect_step and incorrect_step != max_step:
+                    action = ControllerAction.REFINE_CHAIN
+                else:
+                    action = ControllerAction.REFINE_QUERY
+        
+        # 如果 action 仍然是 None，使用默认决策
+        if action is None:
+            print(f"[EnhancedController] Failed to parse action: {action_str}, using default decision")
+            return self._default_decision(state)
+        
+        return Decision(
+            action=action,
+            reason=decision_data.get("reason", ""),
+            confidence=decision_data.get("confidence", 0.5),
+            source="llm"
+        )
+
+
 # ==================== 5. ActionExecutor 类 ====================
 
 class ActionExecutor:
@@ -697,17 +1055,70 @@ class ActionExecutor:
 
 # ==================== 6. controller_main_loop 函数 ====================
 
+def load_clarifier_info(sample: Dict[str, Any], cache_dir: Optional[str] = None, sample_idx: Optional[int] = None, thought_results_dir: Optional[str] = None) -> Dict[str, Any]:
+    """
+    加载 Clarifier 信息
+    
+    加载策略：
+    1. 优先从 sample['clarifier'] 读取
+    2. 如果 sample 中没有，尝试从 Thought 阶段的 clarifier 目录读取
+    3. 如果都没有，尝试从独立缓存文件读取
+    4. 如果都没有，输出警告并返回空字典
+    
+    Args:
+        sample: 输入样本
+        cache_dir: 缓存目录路径
+        sample_idx: 样本索引
+        thought_results_dir: Thought 阶段的结果目录路径（用于读取 clarifier 信息）
+    
+    Returns:
+        Clarifier 信息字典
+    """
+    # 策略1: 从 sample 中读取
+    if 'clarifier' in sample and bool(sample.get('clarifier')):
+        return sample['clarifier']
+    
+    # 策略1.5: 从 cache_dir 推断 Thought 阶段的 clarifier 目录读取
+    # cache_dir 格式: results/refine_clarifier/{dataset}/{model}/{timestamp}/cache
+    # thought_clarifier_dir 格式: results/thought/{dataset}/{model}/clarifier
+    # clarifier 文件格式: case_dict_test-{sample_idx}.pkl
+    if cache_dir and sample_idx is not None:
+        try:
+            # 从 Refine 阶段的 cache_dir 推断 Thought 阶段的 clarifier 目录
+            # 例如: results/refine_clarifier/tabfact/qwen3:32b/20260328_145239/cache
+            #       results/thought/tabfact/qwen3:32b/clarifier
+            parts = cache_dir.split('/')
+            if len(parts) >= 5 and parts[1] == 'refine_clarifier':
+                # 构建thought_clarifier_dir: results/thought/{dataset}/{model}/clarifier
+                thought_clarifier_dir = os.path.join('results', 'thought', parts[2], parts[3], 'clarifier')
+                clarifier_file = os.path.join(thought_clarifier_dir, f"case_dict_test-{sample_idx}.pkl")
+                if os.path.exists(clarifier_file):
+                    with open(clarifier_file, 'rb') as f:
+                        clarifier_data = pickle.load(f)
+                        if DEBUG:
+                            print(f"[DEBUG CLARIFIER] {clarifier_file}")
+                        return clarifier_data
+        except Exception as e:
+            print(f"[WARNING] Failed to load clarifier from inferred Thought stage directory: {e}")
+    
+    # 策略2: 输出警告并返回空字典
+    print(f"[WARNING] No clarifier info found for sample {sample.get('id', 'unknown')}")
+    return {}
+
+
 def controller_main_loop(
     sample: Dict[str, Any],
     llm,
     llm_options,
     max_iterations: int = 5,
     cache_dir: Optional[str] = None,
-    sample_idx: Optional[int] = None
+    sample_idx: Optional[int] = None,
+    use_clarifier: bool = True,
+    thought_results_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Controller 主循环（兼容现有代码）
-    
+    Controller 主循环（集成 Clarifier）
+
     这是阶段一的核心函数，它包装了现有的流程，
     通过 Controller 来决定下一步动作。
     
@@ -723,10 +1134,26 @@ def controller_main_loop(
         max_iterations: 最大迭代次数
         cache_dir: 缓存目录路径（可选）
         sample_idx: 样本索引（用于缓存文件名）
+        use_clarifier: 是否使用 Clarifier 提取模式锚点（默认 True）
+            - True: 优先从 sample 读取，没有则尝试从 Thought 阶段 clarifier 目录读取，再尝试从独立缓存读取，都没有则警告
+            - False: 强制禁用 Clarifier
+        thought_results_dir: Thought 阶段的结果目录路径（用于读取 clarifier 信息）
         
     Returns:
         Dict[str, Any]: 处理后的样本
     """
+    
+    # 根据 use_clarifier 参数决定是否使用 Clarifier 信息
+    # 注意：Refine 阶段从 final_result.pkl 读取的 samples 应该已经包含 clarifier 字段
+    # 这个字段在 Thought 阶段由 clarifier.clarify_batch() 添加，并通过 fixed_chain_exec_mp() 保留
+    
+    if use_clarifier:
+        # 使用 Clarifier 信息
+        clarifier_info = load_clarifier_info(sample, cache_dir, sample_idx, thought_results_dir)
+        sample['clarifier'] = clarifier_info
+    else:
+        # 不使用 Clarifier 信息
+        sample['clarifier'] = {}
     
     # 缓存功能：检查是否存在缓存
     cache_path = None
@@ -940,7 +1367,8 @@ def run_with_controller(
     llm_options,
     max_iterations: int = 2,
     cache_dir: Optional[str] = None,
-    sample_idx: Optional[int] = None
+    sample_idx: Optional[int] = None,
+    thought_results_dir: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     使用 Controller 运行样本的便捷函数
@@ -952,6 +1380,7 @@ def run_with_controller(
         max_iterations: 最大迭代次数
         cache_dir: 缓存目录路径（可选）
         sample_idx: 样本索引（用于缓存文件名）
+        thought_results_dir: Thought 阶段的结果目录路径（用于读取 clarifier 信息）
         
     Returns:
         Dict[str, Any]: 处理后的样本
@@ -962,5 +1391,6 @@ def run_with_controller(
         llm_options=llm_options,
         max_iterations=max_iterations,
         cache_dir=cache_dir,
-        sample_idx=sample_idx
+        sample_idx=sample_idx,
+        thought_results_dir=thought_results_dir
     )

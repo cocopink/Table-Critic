@@ -33727,3 +33727,77 @@ time=2026-03-24T20:13:09.723+08:00 level=INFO source=server.go:429 msg="starting
 [GIN] 2026/03/24 - 20:16:16 | 200 |      53.613µs |       127.0.0.1 | GET      "/api/ps"
 [GIN] 2026/03/24 - 20:17:03 | 200 |      18.178µs |       127.0.0.1 | HEAD     "/"
 [GIN] 2026/03/24 - 20:17:03 | 200 |     580.432µs |       127.0.0.1 | GET      "/api/tags"
+Error: listen tcp 127.0.0.1:11434: bind: address already in use
+
+==========================================
+Table-Critic Ollama 驱动
+==========================================
+任务类型: FV
+模型: qwen3:32b
+处理样本数: 2
+进程数: 1
+批次大小: 1
+使用 Controller: True
+使用 Clarifier: True
+Ollama 并行数: 1
+Ollama 上下文长度: 64000
+==========================================
+
+[0;32m✓ Ollama 已安装[0m
+[0;32m✓ Ollama 服务正在运行[0m参数未更改
+检查模型: qwen3:32b
+[0;32m✓ 模型 qwen3:32b 已存在[0m
+测试 Ollama API 连接...
+[0;32m✓ Ollama API 连接成功[0m
+==========================================
+开始运行 TableFV 任务
+==========================================
+模型: qwen3:32b
+API 地址: http://localhost:11434/v1
+Thought 结果目录: results/thought/tabfact/qwen3:32b
+Refine 结果目录: results/refine_clarifier/tabfact/qwen3:32b/20260328_151859
+==========================================
+
+==========================================
+TableFV Thought 阶段
+==========================================
+Loading tabfact-test dataset:   0%|          | 0/2 [00:00<?, ?it/s]Loading tabfact-test dataset: 100%|██████████| 2/2 [00:00<00:00, 63550.06it/s]
+Initializing ClarifierAgent for schema anchoring...
+Clarified 2 samples
+Saved clarifier results to results/thought/tabfact/qwen3:32b/clarifier
+Dynamic chain execution:   0%|          | 0/2 [00:00<?, ?it/s]Dynamic chain execution: 100%|██████████| 2/2 [00:00<00:00, 437.07it/s]
+Thought Stage Accuracy: 0.9362648221343873
+[0;32m✓ TableFV Thought 阶段完成[0m
+
+==========================================
+TableFV Refine 阶段
+==========================================
+Using controller-based refinement...
+Clarifier enabled: True
+Controller-based refinement:   0%|          | 0/2 [00:00<?, ?it/s]Controller-based refinement:  50%|█████     | 1/2 [00:08<00:08,  8.33s/it]Controller-based refinement: 100%|██████████| 2/2 [00:14<00:00,  6.93s/it]Controller-based refinement: 100%|██████████| 2/2 [00:14<00:00,  7.14s/it]
+[CLARIFIER DEBUG] cache_dir parts: ['results', 'refine_clarifier', 'tabfact', 'qwen3:32b', '20260328_151859', 'cache']
+[CLARIFIER DEBUG] len(parts): 6, parts[1]: refine_clarifier
+[CLARIFIER DEBUG] Inferred thought_clarifier_dir: results/thought/tabfact/qwen3:32b/clarifier
+[CLARIFIER DEBUG] Looking for clarifier file: results/thought/tabfact/qwen3:32b/clarifier/case_dict_test-0.pkl
+[CLARIFIER DEBUG] File exists: True
+[CLARIFIER] Loaded clarifier info from inferred Thought stage directory: results/thought/tabfact/qwen3:32b/clarifier/case_dict_test-0.pkl
+[CACHE] Saved correct result to cache: results/refine_clarifier/tabfact/qwen3:32b/20260328_151859/cache/case-0.pkl
+[CLARIFIER DEBUG] cache_dir parts: ['results', 'refine_clarifier', 'tabfact', 'qwen3:32b', '20260328_151859', 'cache']
+[CLARIFIER DEBUG] len(parts): 6, parts[1]: refine_clarifier
+[CLARIFIER DEBUG] Inferred thought_clarifier_dir: results/thought/tabfact/qwen3:32b/clarifier
+[CLARIFIER DEBUG] Looking for clarifier file: results/thought/tabfact/qwen3:32b/clarifier/case_dict_test-1.pkl
+[CLARIFIER DEBUG] File exists: True
+[CLARIFIER] Loaded clarifier info from inferred Thought stage directory: results/thought/tabfact/qwen3:32b/clarifier/case_dict_test-1.pkl
+[CACHE] Saved correct result to cache: results/refine_clarifier/tabfact/qwen3:32b/20260328_151859/cache/case-1.pkl
+Accuracy: 1.0
+[0;32m✓ TableFV Refine 阶段完成[0m
+
+==========================================
+[0;32mTableFV 任务完成！[0m
+==========================================
+结果目录: results/refine_clarifier/tabfact/qwen3:32b/20260328_151859
+==========================================
+
+[0;32m==========================================
+所有任务完成！
+==========================================\033[0m

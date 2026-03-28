@@ -18,12 +18,13 @@ def select_row_build_prompt(table_text, statement, table_caption=None, num_rows=
 def select_row_func(sample, table_info, llm, llm_options=None, debug=False, critic=None):
     table_text = table_info["table_text"]
 
+    table_caption = sample["table_caption"]
     statement = sample["statement"]
 
     prompt = "" + select_row_demo.rstrip() + "\n\n"
     if critic:
         prompt += critic
-    prompt += select_row_build_prompt(table_text, statement)
+    prompt += select_row_build_prompt(table_text, statement, table_caption)
 
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
 

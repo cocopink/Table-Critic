@@ -112,6 +112,7 @@ def add_column_func(
     # table_info = get_table_info(sample, skip_op=skip_op)
     table_text = table_info["table_text"]
 
+    table_caption = sample["table_caption"]
     cleaned_statement = sample["statement"]
     cleaned_statement = re.sub(r"\d+", "_", cleaned_statement)
 
@@ -119,7 +120,7 @@ def add_column_func(
     if critic:
         prompt += critic
     prompt += add_column_build_prompt(
-        table_text, cleaned_statement, num_rows=3
+        table_text, cleaned_statement, table_caption=table_caption, num_rows=3
     )
     if llm_options is None:
         llm_options = llm.get_model_options()
@@ -178,7 +179,7 @@ def add_column_func(
     def _sample_to_simple_prompt_header(table_text, num_rows=3):
         x = ""
         x += "/*\n"
-        x += table2string(table_text, num_rows=num_rows) + "\n"
+        x += table2string(table_text, caption=table_caption, num_rows=num_rows) + "\n"
         x += "*/\n"
         x += "Explanation: "
         return x

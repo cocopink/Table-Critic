@@ -45,12 +45,30 @@ def select_column_func(sample, table_info, llm, llm_options, debug=False, num_ro
     table_caption = sample["table_caption"]
     statement = sample["statement"]
 
+    # 获取 Clarifier 信息，向后兼容：如果不存在则返回空字典
+    clarifier_info = sample.get('clarifier', {})
+
     prompt = "" + select_column_demo.rstrip() + "\n\n"
     if critic:
         prompt += critic
     prompt += select_column_build_prompt(
         table_text, statement, table_caption, num_rows=num_rows
     )
+    
+    # 如果存在 Clarifier 信息，添加到 prompt 中以提供额外的上下文信息
+    if clarifier_info:
+        prompt += "\nAdditional Context from Clarifier:\n"
+        if 'headers' in clarifier_info and clarifier_info['headers']:
+            prompt += f"- Column Headers: {clarifier_info['headers']}\n"
+        if 'entities' in clarifier_info and clarifier_info['entities']:
+            prompt += f"- Identified Entities: {clarifier_info['entities']}\n"
+        if 'units' in clarifier_info and clarifier_info['units']:
+            prompt += f"- Units: {clarifier_info['units']}\n"
+        if 'question_keywords' in clarifier_info and clarifier_info['question_keywords']:
+            prompt += f"- Question Keywords: {clarifier_info['question_keywords']}\n"
+        if 'column_mapping' in clarifier_info and clarifier_info['column_mapping']:
+            prompt += f"- Column Mapping: {clarifier_info['column_mapping']}\n"
+        prompt += "\n"
 
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
 

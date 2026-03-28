@@ -31,6 +31,9 @@ def fixed_chain_exec_mp(llm, init_samples, fixed_op_list, n_proc=10, chunk_size=
     history = {}
     final_result = None
 
+    # 保存原始样本，用于保留 clarifier 字段
+    orig_samples = copy.deepcopy(init_samples)
+    
     chain_header = copy.deepcopy(init_samples)
     chain_key = ""
 
@@ -48,6 +51,12 @@ def fixed_chain_exec_mp(llm, init_samples, fixed_op_list, n_proc=10, chunk_size=
             ),
             **kargs,
         )
+
+        # 确保 clarifier 字段被保留
+        # 如果 solver 返回的 sample 没有 clarifier 字段，从原始 sample 中复制
+        for idx, (orig_sample, proc_sample) in enumerate(zip(orig_samples, chain_header)):
+            if proc_sample is not None and 'clarifier' in orig_sample and 'clarifier' not in proc_sample:
+                proc_sample['clarifier'] = orig_sample['clarifier']
 
         history[f"({i}) {chain_key}"] = chain_header
         if i == len(fixed_op_list) - 1:
@@ -523,6 +532,9 @@ def dynamic_chain_exec_one_sample(
     dynamic_chain_log = []
 
     current_sample = copy.deepcopy(sample)
+    # 保存原始 sample 的 clarifier 字段
+    original_clarifier = sample.get('clarifier', None)
+    
     while True:
         # generate next operation
         next_operation, log = generate_prompt_for_next_step(
@@ -548,6 +560,11 @@ def dynamic_chain_exec_one_sample(
         current_sample = solver_func(
             current_sample, table_info, llm=llm, llm_options=op_llm_options, **kargs
         )
+        
+        # 确保 clarifier 字段被保留
+        if original_clarifier is not None and 'clarifier' not in current_sample:
+            current_sample['clarifier'] = original_clarifier
+    
     return current_sample, dynamic_chain_log
 
 
@@ -596,10 +613,15 @@ def _dynamic_chain_exec_with_cache_mp_core(arg):
         cache_path = os.path.join(cache_dir, cache_filename.format(idx))
         if os.path.exists(cache_path):
             _, proc_sample, log = pickle.load(open(cache_path, "rb"))
+            # 确保 clarifier 字段被保留
+            # 如果从缓存加载的 sample 没有 clarifier 字段，从原始 sample 中复制
+            if proc_sample is not None and 'clarifier' in sample and 'clarifier' not in proc_sample:
+                proc_sample['clarifier'] = sample['clarifier']
         else:
             proc_sample, log = dynamic_chain_exec_one_sample(
                 sample, llm=llm, llm_options=llm_options, strategy=strategy
             )
+            # 确保 clarifier 字段被包含在保存的缓存中
             pickle.dump((sample, proc_sample, log), open(cache_path, "wb"))
         return idx, proc_sample, log
     except Exception as e:

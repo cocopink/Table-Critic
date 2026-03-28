@@ -382,6 +382,9 @@ def generate_prompt_for_next_step(
     if len(possible_next_operations) == 1:
         return possible_next_operations[0]
 
+    # 获取 Clarifier 信息，向后兼容：如果不存在则返回空字典
+    clarifier_info = sample.get('clarifier', {})
+
     prompt = ""
     for operation in possible_next_operations:
         if operation == "<END>":
@@ -392,6 +395,21 @@ def generate_prompt_for_next_step(
 
     prompt += "/*\n" + table2string(table_info["table_text"]) + "\n*/\n"
     prompt += "Statement: " + sample["statement"] + "\n"
+    
+    # 如果存在 Clarifier 信息，添加到 prompt 中以提供额外的上下文信息
+    if clarifier_info:
+        prompt += "\nAdditional Context from Clarifier:\n"
+        if 'headers' in clarifier_info and clarifier_info['headers']:
+            prompt += f"- Column Headers: {clarifier_info['headers']}\n"
+        if 'entities' in clarifier_info and clarifier_info['entities']:
+            prompt += f"- Identified Entities: {clarifier_info['entities']}\n"
+        if 'units' in clarifier_info and clarifier_info['units']:
+            prompt += f"- Units: {clarifier_info['units']}\n"
+        if 'question_keywords' in clarifier_info and clarifier_info['question_keywords']:
+            prompt += f"- Question Keywords: {clarifier_info['question_keywords']}\n"
+        if 'column_mapping' in clarifier_info and clarifier_info['column_mapping']:
+            prompt += f"- Column Mapping: {clarifier_info['column_mapping']}\n"
+        prompt += "\n"
 
     _possible_next_operations_str = " or ".join(
         [f"f_{op}()" if op != "<END>" else op for op in possible_next_operations]
@@ -502,6 +520,9 @@ def generate_prompt_for_critic_step(
         print("Last Operation: ", last_operation, flush=True)
         print("Possible Next Operations: ", possible_next_operations, flush=True)
 
+    # 获取 Clarifier 信息，向后兼容：如果不存在则返回空字典
+    clarifier_info = sample.get('clarifier', {})
+
     if len(possible_next_operations) == 1:
         parameter_prompt = ""
 
@@ -521,6 +542,22 @@ def generate_prompt_for_critic_step(
                 group_rows.append([f"Group {i+1}", v, str(count)])
             parameter_prompt += f"{pd.DataFrame(group_rows, columns=group_headers)}\n*/\n"
         parameter_prompt += "Statement: " + sample["statement"] + "\n"
+        
+        # 如果存在 Clarifier 信息，添加到 prompt 中以提供额外的上下文信息
+        if clarifier_info:
+            parameter_prompt += "\nAdditional Context from Clarifier:\n"
+            if 'headers' in clarifier_info and clarifier_info['headers']:
+                parameter_prompt += f"- Column Headers: {clarifier_info['headers']}\n"
+            if 'entities' in clarifier_info and clarifier_info['entities']:
+                parameter_prompt += f"- Identified Entities: {clarifier_info['entities']}\n"
+            if 'units' in clarifier_info and clarifier_info['units']:
+                parameter_prompt += f"- Units: {clarifier_info['units']}\n"
+            if 'question_keywords' in clarifier_info and clarifier_info['question_keywords']:
+                parameter_prompt += f"- Question Keywords: {clarifier_info['question_keywords']}\n"
+            if 'column_mapping' in clarifier_info and clarifier_info['column_mapping']:
+                parameter_prompt += f"- Column Mapping: {clarifier_info['column_mapping']}\n"
+            parameter_prompt += "\n"
+        
         parameter_prompt += f"Critique: \n{critique}\n\n"
 
         parameter_prompt += f"Based on the critique, we want to use {possible_next_operations[0]}() to reproduce step {incorrect_step}. Please generate the answer in the format of the example above.\n"
@@ -552,6 +589,22 @@ def generate_prompt_for_critic_step(
             group_rows.append([f"Group {i+1}", v, str(count)])
         prompt += f"{pd.DataFrame(group_rows, columns=group_headers)}\n*/\n"
     prompt += "Statement: " + sample["statement"] + "\n"
+    
+    # 如果存在 Clarifier 信息，添加到 prompt 中以提供额外的上下文信息
+    if clarifier_info:
+        prompt += "\nAdditional Context from Clarifier:\n"
+        if 'headers' in clarifier_info and clarifier_info['headers']:
+            prompt += f"- Column Headers: {clarifier_info['headers']}\n"
+        if 'entities' in clarifier_info and clarifier_info['entities']:
+            prompt += f"- Identified Entities: {clarifier_info['entities']}\n"
+        if 'units' in clarifier_info and clarifier_info['units']:
+            prompt += f"- Units: {clarifier_info['units']}\n"
+        if 'question_keywords' in clarifier_info and clarifier_info['question_keywords']:
+            prompt += f"- Question Keywords: {clarifier_info['question_keywords']}\n"
+        if 'column_mapping' in clarifier_info and clarifier_info['column_mapping']:
+            prompt += f"- Column Mapping: {clarifier_info['column_mapping']}\n"
+        prompt += "\n"
+    
     prompt += f"Critique: \n{critique}\n\n"
 
     prompt += "Based on the critique, please continue to produce a complete and correct Function Chain.\n"

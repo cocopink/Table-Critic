@@ -30,7 +30,7 @@ OLLAMA_API_KEY="ollama"
 
 # Ollama 运行参数配置（可通过环境变量或参数修改）
 OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
-OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-4096}
+OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-64000}
 
 # 默认模型（可通过参数修改）
 DEFAULT_MODEL="qwen3:32b"
@@ -46,15 +46,21 @@ TASK_TYPE="QA"
 # Controller 参数（默认启用）
 USE_CONTROLLER=True
 
+# 添加时间戳用于日志文件命名
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+# Clarifier 参数（默认启用）
+USE_CLARIFIER=True
+
 # 结果目录配置（不包含模型名，将在运行时动态添加）
 # BASE_THOUGHT_RESULTS_FV='results/thought_100/tabfact'
 # BASE_REFINE_RESULTS_FV='results/refine_100/tabfact'
 # BASE_THOUGHT_RESULTS_QA='results/thought_100/wikitq'
 # BASE_REFINE_RESULTS_QA='results/refine_100/wikitq'
 BASE_THOUGHT_RESULTS_FV='results/thought/tabfact'
-BASE_REFINE_RESULTS_FV='results/refine_mr/tabfact'
+BASE_REFINE_RESULTS_FV='results/refine_clarifier/tabfact'
 BASE_THOUGHT_RESULTS_QA='results/thought/wikitq'
-BASE_REFINE_RESULTS_QA='results/refine_mr/wikitq'
+BASE_REFINE_RESULTS_QA='results/refine_clarifier/wikitq'
 
 # ========================================
 # 函数定义
@@ -75,6 +81,7 @@ print_help() {
     echo "  -p, --n_proc NUM     进程数 (默认: 1)"
     echo "  -c, --chunk_size NUM 批次大小 (默认: 1)"
     echo "  --use_controller BOOL 是否使用 controller (默认: True)"
+    echo "  --use_clarifier BOOL 是否使用 clarifier (默认: True)"
     echo "  --num_parallel NUM   Ollama 并行请求数 (默认: ${OLLAMA_NUM_PARALLEL})"
     echo "  --context_length NUM Ollama 上下文长度 (默认: ${OLLAMA_CONTEXT_LENGTH})"
     echo "  -h, --help           显示此帮助信息"
@@ -206,7 +213,7 @@ run_table_fv() {
     echo "TableFV Thought 阶段"
     echo "=========================================="
     
-    python thought/TableFV/main.py \
+    python3 thought/TableFV/main.py \
         --thought_results_dir $thought_results_dir \
         --base_url $OLLAMA_API_BASE \
         --openai_api_key $OLLAMA_API_KEY \
@@ -228,7 +235,7 @@ run_table_fv() {
     echo "TableFV Refine 阶段"
     echo "=========================================="
     
-    python refine/TableFV/main_tree_based.py \
+    python3 refine/TableFV/main_tree_based.py \
         --thought_results_dir $thought_results_dir \
         --refine_results_dir $refine_results_dir \
         --base_url $OLLAMA_API_BASE \
@@ -237,8 +244,8 @@ run_table_fv() {
         --first_n $FIRST_N \
         --n_proc $N_PROC \
         --chunk_size $CHUNK_SIZE \
-        --use_multi_agent $USE_MULTI_AGENT \
-        --use_controller $USE_CONTROLLER
+        --use_controller $USE_CONTROLLER \
+        --use_clarifier $USE_CLARIFIER
 
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: refine/TableFV/main_tree_based.py 执行失败${NC}"
@@ -278,7 +285,7 @@ run_table_qa() {
     echo "TableQA Thought 阶段"
     echo "=========================================="
     
-    python thought/TableQA/main.py \
+    python3 thought/TableQA/main.py \
         --thought_results_dir $thought_results_dir \
         --base_url $OLLAMA_API_BASE \
         --openai_api_key $OLLAMA_API_KEY \
@@ -300,7 +307,7 @@ run_table_qa() {
     echo "TableQA Refine 阶段"
     echo "=========================================="
     
-    python refine/TableQA/main_tree_based.py \
+    python3 refine/TableQA/main_tree_based.py \
         --thought_results_dir $thought_results_dir \
         --refine_results_dir $refine_results_dir \
         --base_url $OLLAMA_API_BASE \
@@ -309,8 +316,8 @@ run_table_qa() {
         --first_n $FIRST_N \
         --n_proc $N_PROC \
         --chunk_size $CHUNK_SIZE \
-        --use_multi_agent $USE_MULTI_AGENT \
-        --use_controller $USE_CONTROLLER
+        --use_controller $USE_CONTROLLER \
+        --use_clarifier $USE_CLARIFIER
     
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: refine/TableQA/main_tree_based.py 执行失败${NC}"
@@ -360,6 +367,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --use_controller)
             USE_CONTROLLER="$2"
+            shift 2
+            ;;
+        --use_clarifier)
+            USE_CLARIFIER="$2"
             shift 2
             ;;
         --num_parallel)
@@ -414,6 +425,7 @@ echo "处理样本数: ${FIRST_N}"
 echo "进程数: ${N_PROC}"
 echo "批次大小: ${CHUNK_SIZE}"
 echo "使用 Controller: ${USE_CONTROLLER}"
+echo "使用 Clarifier: ${USE_CLARIFIER}"
 echo "Ollama 并行数: ${OLLAMA_NUM_PARALLEL}"
 echo "Ollama 上下文长度: ${OLLAMA_CONTEXT_LENGTH}"
 echo "=========================================="
@@ -432,6 +444,8 @@ check_model "$MODEL"
 
 # 测试 API 连接
 test_ollama_api "$MODEL"
+
+source /home/ubuntu/mnt/lx/new_TC/venv_shared_deepsearcher/bin/activate
 
 # 根据任务类型运行
 if [ "$TASK_TYPE" = "FV" ]; then

@@ -4,7 +4,6 @@ import fire
 import os
 import sys
 from tqdm import tqdm
-import copy
 sys.path.append('critic/TableQA')
 sys.path.append('refine/TableQA')
 sys.path.append('.')
@@ -16,15 +15,6 @@ from utils.evaluate import *
 from utils.chain import *
 from operations import *
 from tools import read_pkl, critic_tree_init
-from agents import (
-    InitialReasoner,
-    JudgeAgent,
-    CriticAgent,
-    RefinerAgent,
-    ValidatorAgent,
-    MultiAgentOrchestrator,
-    DisputeHandler
-)
 from utils.controller import controller_main_loop
 
 def main(
@@ -36,8 +26,8 @@ def main(
     first_n=-1,
     n_proc=1,
     chunk_size=1,
-    use_multi_agent: bool = False,
     use_controller: bool = True,
+    use_clarifier: bool = True,
 ):
 
     result_pkl = os.path.join(thought_results_dir, "final_result.pkl")
@@ -58,75 +48,13 @@ def main(
     cache_dir = os.path.join(refine_results_dir, "cache")
     os.makedirs(cache_dir, exist_ok=True)
 
-    if use_multi_agent:
-        # Use new multi-agent framework
-        print("Using multi-agent framework for refinement...")
-
-        # Initialize agents
-        reasoner = InitialReasoner(llm=gpt_llm)
-        judge = JudgeAgent(llm=gpt_llm)
-        critic = CriticAgent(llm=gpt_llm)
-        refiner = RefinerAgent(llm=gpt_llm)
-        validator = ValidatorAgent(llm=gpt_llm)
-
-        # Create orchestrator
-        orchestrator = MultiAgentOrchestrator(llm=gpt_llm)
-        orchestrator.register_agent(reasoner)
-        orchestrator.register_agent(judge)
-        orchestrator.register_agent(critic)
-        orchestrator.register_agent(refiner)
-        orchestrator.register_agent(validator)
-
-        # Create dispute handler
-        dispute_handler = DisputeHandler(critic, refiner, validator, judge)
-
-        # Process samples
-        refined_samples = []
-        for sample in all_samples:
-            sample_id = sample.get('id', 'unknown')
-
-            # Save original chain (first incorrect chain)
-            original_chain = copy.deepcopy(sample.get('chain', []))
-
-            # Check if already correct
-            judge_sample = judge.judge_sample(sample, task_type="TableQA")
-            if judge_sample.get('judge') == '[Correct]':
-                refined_samples.append(judge_sample)
-                continue
-
-            # Run dispute resolution
-            refined_sample, dispute_history = dispute_handler.resolve_dispute(
-                judge_sample,
-                error_route='random'
-            )
-
-            # Save thinking chains
-            final_chain = copy.deepcopy(refined_sample.get('chain', []))
-
-            # Create save data
-            save_data = {
-                'sample_id': sample_id,
-                'original_chain': original_chain,
-                'final_chain': final_chain,
-                'dispute_history': dispute_history,
-                'original_conclusion': '[Incorrect]',
-                'final_conclusion': refined_sample.get('judge', '[Incorrect]')
-            }
-
-            # Save to cache
-            cache_path = os.path.join(cache_dir, f'case_{sample_id}.pkl')
-            pickle.dump(save_data, open(cache_path, 'wb'))
-
-            refined_samples.append(refined_sample)
-
-        refine_list = refined_samples
-
-    elif use_controller:
+    if use_controller:
         # Use controller-based refinement
         print("Using controller-based refinement...")
+        print(f"Clarifier enabled: {use_clarifier}")
         
         # Initialize critic tree
-        # critic_tree_init(file_path="critic/TableQA/tools/few_shot_critic.json")
+        critic_tree_init(file_path="critic/TableQA/tools/few_shot_critic.json")
         
         # Process samples with controller
         refined_samples = []
@@ -144,9 +72,11 @@ def main(
                 ),
                 max_iterations=2,
                 cache_dir=cache_dir,
-                sample_idx=idx
+                sample_idx=idx,
+                use_clarifier=use_clarifier,
+                thought_results_dir=thought_results_dir,
             )
-            
+            # 若要控制debug 在controller 中DEBUG变量的修改
             refined_samples.append(refined_sample)
         
         refine_list = refined_samples
