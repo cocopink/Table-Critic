@@ -46,6 +46,9 @@ def main(
         base=base_url
     )
 
+    token_log_dir = os.path.join(thought_results_dir, "token_logs")
+    gpt_llm.set_token_log_dir(token_log_dir)
+
     os.makedirs(thought_results_dir, exist_ok=True)
 
     proc_samples, _ = dynamic_chain_exec_with_cache_mp(
@@ -88,6 +91,8 @@ def main(
     print(f"Thought Stage Accuracy: {acc}")
     with open(os.path.join(thought_results_dir, "acc.txt"), "w") as f:
         f.write(f"Thought Stage Accuracy: {acc}\n")
+
+    LLM.collect_token_usage(token_log_dir, os.path.join(thought_results_dir, "token_usage.json"))
 
 
 

@@ -38,6 +38,9 @@ def main(
         base=base_url
     )
 
+    token_log_dir = os.path.join(refine_results_dir, "token_logs")
+    gpt_llm.set_token_log_dir(token_log_dir)
+
     critic_tree_init(file_path="critic/TableQA/tools/few_shot_critic.json")
     refine_list = judge_critic_refine_with_cache_mp(
         all_samples,
@@ -61,6 +64,8 @@ def main(
     pickle.dump(
         refine_list, open(os.path.join(refine_results_dir, "final_result.pkl"), "wb")
     )
+
+    LLM.collect_token_usage(token_log_dir, os.path.join(refine_results_dir, "token_usage.json"))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,216 @@
+{
+  "timestamp": "2026-04-10T10:07:11+08:00",
+  "project": "Table-Critic",
+  "description": "基于大语言模型的多智能体表格批评与推理框架 (ACL 2025)",
+  "language": "Python",
+  "python_version": "3.10+",
+  "root_claude_md": "CLAUDE.md",
+  "modules": [
+    {
+      "path": "thought/TableFV",
+      "name": "Thought-TableFV",
+      "description": "TableFV 事实验证任务的初始推理链生成",
+      "entry_files": ["thought/TableFV/main.py"],
+      "key_files": [
+        "thought/TableFV/utils/chain.py",
+        "thought/TableFV/utils/llm.py",
+        "thought/TableFV/utils/load_data.py",
+        "thought/TableFV/utils/evaluate.py",
+        "thought/TableFV/utils/helper.py",
+        "thought/TableFV/operations/__init__.py",
+        "thought/TableFV/operations/add_column.py",
+        "thought/TableFV/operations/select_row.py",
+        "thought/TableFV/operations/select_column.py",
+        "thought/TableFV/operations/group_by.py",
+        "thought/TableFV/operations/sort_by.py",
+        "thought/TableFV/operations/final_query.py"
+      ],
+      "data_files": [
+        "thought/TableFV/data/tabfact/test.jsonl",
+        "thought/TableFV/data/tabfact/raw2clean.jsonl"
+      ],
+      "has_tests": false,
+      "claude_md": "thought/CLAUDE.md"
+    },
+    {
+      "path": "thought/TableQA",
+      "name": "Thought-TableQA",
+      "description": "TableQA 问答任务的初始推理链生成",
+      "entry_files": ["thought/TableQA/main.py"],
+      "key_files": [
+        "thought/TableQA/utils/chain.py",
+        "thought/TableQA/utils/llm.py",
+        "thought/TableQA/utils/load_data.py",
+        "thought/TableQA/utils/evaluate.py",
+        "thought/TableQA/utils/helper.py",
+        "thought/TableQA/operations/__init__.py",
+        "thought/TableQA/operations/add_column.py",
+        "thought/TableQA/operations/select_row.py",
+        "thought/TableQA/operations/select_column.py",
+        "thought/TableQA/operations/group_by.py",
+        "thought/TableQA/operations/sort_by.py",
+        "thought/TableQA/operations/final_query.py"
+      ],
+      "data_files": [
+        "thought/TableQA/data/wikitq/test_lower.jsonl",
+        "thought/TableQA/data/wikitq/tagged_data/"
+      ],
+      "has_tests": false,
+      "claude_md": "thought/CLAUDE.md"
+    },
+    {
+      "path": "critic/TableFV",
+      "name": "Critic-TableFV",
+      "description": "TableFV 任务的批评分析（Judge/Tree/Critic 三角色）",
+      "entry_files": ["critic/TableFV/main.py"],
+      "key_files": [
+        "critic/TableFV/tools/instruction.py",
+        "critic/TableFV/tools/get_info.py",
+        "critic/TableFV/tools/update_tree.py",
+        "critic/TableFV/tools/multiprocess.py",
+        "critic/TableFV/tools/few_shot_critic.json",
+        "critic/TableFV/tools/few_shot_judge.json",
+        "critic/TableFV/tools/few_shot_tree.json"
+      ],
+      "data_files": [],
+      "has_tests": false,
+      "claude_md": "critic/CLAUDE.md"
+    },
+    {
+      "path": "critic/TableQA",
+      "name": "Critic-TableQA",
+      "description": "TableQA 任务的批评分析（Judge/Tree/Critic 三角色）",
+      "entry_files": ["critic/TableQA/main.py"],
+      "key_files": [
+        "critic/TableQA/tools/instruction.py",
+        "critic/TableQA/tools/get_info.py",
+        "critic/TableQA/tools/update_tree.py",
+        "critic/TableQA/tools/multiprocess.py",
+        "critic/TableQA/tools/few_shot_critic.json",
+        "critic/TableQA/tools/few_shot_judge.json",
+        "critic/TableQA/tools/few_shot_tree.json"
+      ],
+      "data_files": [],
+      "has_tests": false,
+      "claude_md": "critic/CLAUDE.md"
+    },
+    {
+      "path": "refine/TableFV",
+      "name": "Refine-TableFV",
+      "description": "TableFV 任务的批评驱动精炼（Tree-Based）",
+      "entry_files": ["refine/TableFV/main_tree_based.py"],
+      "key_files": [
+        "refine/TableFV/utils/chain.py",
+        "refine/TableFV/utils/extract_step.py",
+        "refine/TableFV/utils/evaluate.py",
+        "refine/TableFV/utils/llm.py",
+        "refine/TableFV/utils/helper.py"
+      ],
+      "data_files": [],
+      "has_tests": false,
+      "claude_md": "refine/CLAUDE.md"
+    },
+    {
+      "path": "refine/TableQA",
+      "name": "Refine-TableQA",
+      "description": "TableQA 任务的批评驱动精炼（Tree-Based + Constraint-Based）",
+      "entry_files": [
+        "refine/TableQA/main_tree_based.py",
+        "refine/TableQA/main_constraint_based.py"
+      ],
+      "key_files": [
+        "refine/TableQA/utils/chain.py",
+        "refine/TableQA/utils/extract_step.py",
+        "refine/TableQA/utils/evaluate.py",
+        "refine/TableQA/utils/llm.py",
+        "refine/TableQA/utils/helper.py",
+        "refine/TableQA/utils/constraint_state.py",
+        "refine/TableQA/utils/constraint_induction.py",
+        "refine/TableQA/utils/constraint_aware_chain.py"
+      ],
+      "data_files": [],
+      "has_tests": false,
+      "claude_md": "refine/CLAUDE.md"
+    }
+  ],
+  "root_scripts": [
+    "run_FV.sh",
+    "run_QA.sh",
+    "auto.sh",
+    "run_ollama_model.sh",
+    "run_refine_constraint_based.sh",
+    "order.sh",
+    "cal_acc.py",
+    "visualize_results.py",
+    "visualize_wikitq.py",
+    "pkl.py"
+  ],
+  "coverage": {
+    "estimated_total_source_files": 82,
+    "scanned_files": 78,
+    "coverage_percentage": 95.1,
+    "scanned_modules": 6,
+    "total_modules": 6,
+    "module_coverage_percentage": 100.0,
+    "truncated": false,
+    "gaps": [
+      {
+        "module": "thought/TableFV",
+        "missing": ["operations/ 各操作函数的详细实现（已确认 __init__.py 导出结构）"]
+      },
+      {
+        "module": "thought/TableQA",
+        "missing": ["operations/ 各操作函数的详细实现", "tagged_data/ 目录下的 TSV 文件内容"]
+      },
+      {
+        "module": "critic/TableFV",
+        "missing": ["few_shot_critic.json / few_shot_judge.json / few_shot_tree.json 的完整内容（仅结构已知）"]
+      },
+      {
+        "module": "critic/TableQA",
+        "missing": ["few_shot_critic.json / few_shot_judge.json / few_shot_tree.json 的完整内容"]
+      },
+      {
+        "module": "refine/TableFV",
+        "missing": ["operations/ 中带 critic 参数的操作实现差异"]
+      },
+      {
+        "module": "refine/TableQA",
+        "missing": ["constraint_aware_chain.py 完整内容", "operations/ 实现细节"]
+      }
+    ]
+  },
+  "ignored": {
+    "rules_source": ".gitignore",
+    "patterns": ["results/", "*.pkl", "venv_shared_deepsearcher/", "*.log", "__pycache__/", "api.txt"],
+    "additional_ignored": [".git/", "*.pyc"],
+    "skipped_directories": [
+      {
+        "path": "results/",
+        "reason": ".gitignore 忽略，包含大量实验结果 pkl 文件"
+      },
+      {
+        "path": "thought/TableQA/data/wikitq/tagged_data/",
+        "reason": "标注数据目录，非源码"
+      },
+      {
+        "path": "refine/TableQA/third_party/",
+        "reason": "第三方代码（select_column_row_prompts）"
+      },
+      {
+        "path": "thought/TableFV/third_party/",
+        "reason": "第三方代码（select_column_row_prompts）"
+      },
+      {
+        "path": "refine/TableFV/third_party/",
+        "reason": "第三方代码（select_column_row_prompts）"
+      }
+    ],
+    "skipped_files_count_estimate": 150
+  },
+  "next_steps": [
+    "深入扫描 operations/ 中各操作函数的实现（add_column.py, select_row.py 等），理解 critic 参数如何影响操作生成",
+    "读取 few_shot_critic.json / few_shot_tree.json / few_shot_judge.json 的完整内容，理解错误树结构",
+    "读取 refine/TableQA/utils/constraint_aware_chain.py 完整内容，理解约束推理的实现细节"
+  ]
+}
