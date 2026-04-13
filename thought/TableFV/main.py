@@ -27,20 +27,25 @@ from utils.evaluate import *
 from utils.chain import *
 from operations import *
 from tools.read_pkl import read_pkl
-from agents.clarifier_agent import ClarifierAgent, create_clarifier_result_path
 
 
 def main(
     dataset_path: str = "thought/TableFV/data/tabfact/test.jsonl",
     raw2clean_path: str ="thought/TableFV/data/tabfact/raw2clean.jsonl",
-    thought_results_dir: str = "results/thought/tabfact",
+    thought_results_dir: str = "",
     base_url="",
     openai_api_key="EMPTY",
     model_name="qwen2.5-72b-instruct",
     first_n=-1,
     n_proc=8,
     chunk_size=4,
+    use_clarifier: bool = True,
 ):
+    # Auto-switch results directory based on mode
+    mode_dir = "new" if use_clarifier else "orig"
+    if not thought_results_dir:
+        thought_results_dir = f"results/{mode_dir}/thought/tabfact"
+
     dataset = load_tabfact_dataset(dataset_path, raw2clean_path, first_n=first_n)
 
     gpt_llm = LLM(
@@ -50,26 +55,32 @@ def main(
     )
 
     os.makedirs(thought_results_dir, exist_ok=True)
-    
-    # Initialize ClarifierAgent and extract schema anchors
-    print("Initializing ClarifierAgent for schema anchoring...")
-    clarifier = ClarifierAgent(llm=gpt_llm)
-    dataset = clarifier.clarify_batch(dataset)
-    print(f"Clarified {len(dataset)} samples")
 
-    # Save clarifier results
-    clarifier_dir = os.path.join(thought_results_dir, "clarifier")
-    os.makedirs(clarifier_dir, exist_ok=True)
+    # 启用token日志
+    gpt_llm.set_token_log_dir(thought_results_dir, run_tag="tabfact_thought")
 
-    for sample in dataset:
-        sample_id = sample.get('id', 'unknown')
-        clarifier_path = os.path.join(clarifier_dir, f'case_dict_{sample_id}.pkl')
-        pickle.dump(
-            sample['clarifier'],
-            open(clarifier_path, "wb")
-        )
-    print(f"Saved clarifier results to {clarifier_dir}")
+    if use_clarifier:
+        from agents.clarifier_agent import ClarifierAgent, create_clarifier_result_path
+        import pickle
 
+        # Initialize ClarifierAgent and extract schema anchors
+        print("Initializing ClarifierAgent for schema anchoring...")
+        clarifier = ClarifierAgent(llm=gpt_llm)
+        dataset = clarifier.clarify_batch(dataset)
+        print(f"Clarified {len(dataset)} samples")
+
+        # Save clarifier results
+        clarifier_dir = os.path.join(thought_results_dir, "clarifier")
+        os.makedirs(clarifier_dir, exist_ok=True)
+
+        for sample in dataset:
+            sample_id = sample.get('id', 'unknown')
+            clarifier_path = os.path.join(clarifier_dir, f'case_dict_{sample_id}.pkl')
+            pickle.dump(
+                sample['clarifier'],
+                open(clarifier_path, "wb")
+            )
+        print(f"Saved clarifier results to {clarifier_dir}")
 
     proc_samples, _ = dynamic_chain_exec_with_cache_mp(
         dataset,
@@ -108,6 +119,19 @@ def main(
     print(f"Thought Stage Accuracy: {acc}")
     with open(os.path.join(thought_results_dir, "acc.txt"), "w") as f:
         f.write(f"Thought Stage Accuracy: {acc}\n")
+
+    # 汇总并保存token统计
+    token_usage = LLM.collect_token_usage(
+        thought_results_dir,
+        output_path=os.path.join(thought_results_dir, "token_usage.json")
+    )
+    if token_usage["total_tokens"] > 0:
+        print(f"\nThought Stage Token Usage:")
+        print(f"  Input Tokens:  {token_usage['input_tokens']:,}")
+        print(f"  Output Tokens: {token_usage['output_tokens']:,}")
+        print(f"  Total Tokens: {token_usage['total_tokens']:,} ({token_usage['api_calls']} calls)")
+    else:
+        print(f"\nThought Stage: no new API calls (all cached).")
 
 
 if __name__ == "__main__":

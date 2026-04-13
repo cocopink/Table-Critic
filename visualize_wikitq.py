@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Table-Critic 结果可视化脚本
-展示三个阶段（Thought、Critic、Refine）的数据特征
+WikiTableQuestions 结果对比可视化脚本
+专门用于对比 Thought 和 Refine 两个阶段的结果
 """
 
 import os
 import pickle
-import json
 import glob
 from collections import defaultdict
-from pathlib import Path
+import sys
+
+# 添加评估模块路径
+sys.path.append('thought/TableQA')
+from utils.evaluate import wikitq_match_func_for_samples
 
 
 def table2string(table_text, num_rows=100):
@@ -45,18 +48,17 @@ def load_pkl_files(directory, pattern="*.pkl"):
 def analyze_sample(sample):
     """分析单个样本的数据特征"""
     # 处理sample可能是dict或tuple的情况
-    # Thought阶段: 单个dict
-    # Refine阶段: 单个dict（包含critic/judge/tree字段）
     if isinstance(sample, tuple) and len(sample) >= 1:
-        # 如果是tuple，取第一个元素
         sample = sample[0] if isinstance(sample[0], dict) else sample
+    
+    # 提取所有可能的ID字段
+    ids = sample.get('ids', sample.get('id', 'N/A'))
     
     features = {
         'id': sample.get('id', 'N/A'),
+        'ids': ids,  # WikiTableQuestions 使用 'ids'
         'statement': sample.get('statement', ''),
         'table_caption': sample.get('table_caption', ''),
-        'label': sample.get('label', -1),
-        'cleaned_statement': sample.get('cleaned_statement', ''),
         'table_rows': len(sample.get('table_text', [])) if sample.get('table_text') else 0,
         'table_cols': len(sample.get('table_text', [])[0]) if sample.get('table_text') else 0,
     }
@@ -65,6 +67,14 @@ def analyze_sample(sample):
     chain = sample.get('chain', [])
     features['chain_length'] = len(chain)
     features['chain_operations'] = [op.get('operation_name', 'Unknown') for op in chain]
+    
+    # 获取预测答案
+    if chain and 'parameter_and_conf' in chain[-1]:
+        features['predicted_answer'] = chain[-1]['parameter_and_conf'][0][0]
+        features['confidence'] = chain[-1]['parameter_and_conf'][0][1]
+    else:
+        features['predicted_answer'] = ''
+        features['confidence'] = 0
     
     # 分析Critic结果（Refine阶段特有）
     if 'critique' in sample:
@@ -99,7 +109,6 @@ def analyze_sample(sample):
 
 def display_sample_summary(sample, stage_name):
     """显示样本摘要信息"""
-
     features = analyze_sample(sample)
     
     print(f"\n{'='*80}")
@@ -108,10 +117,15 @@ def display_sample_summary(sample, stage_name):
     
     print(f"\n📋 基本信息:")
     print(f"  样本ID: {features['id']}")
+    print(f"  样本IDs: {features['ids']}")
     print(f"  陈述: {features['statement'][:100]}..." if len(features['statement']) > 100 else f"  陈述: {features['statement']}")
     print(f"  表格标题: {features['table_caption']}")
-    print(f"  真实标签: {features['label']} ({'✓ 正确' if features['label'] == 1 else '✗ 错误'})")
     print(f"  表格维度: {features['table_rows']} 行 × {features['table_cols']} 列")
+    
+    # 显示预测答案
+    if features['predicted_answer']:
+        print(f"  预测答案: {features['predicted_answer']}")
+        print(f"  置信度: {features['confidence']:.4f}")
     
     print(f"\n🔗 推理链:")
     print(f"  链长度: {features['chain_length']} 步")
@@ -157,38 +171,24 @@ def display_sample_summary(sample, stage_name):
     print(f"{'='*80}\n")
 
 
-def analyze_directory(directory, stage_name, max_samples=3):
-    """分析目录中的所有样本"""
-    print(f"\n\n{'#'*80}")
+def load_samples_from_directory(directory, stage_name):
+    """从目录加载所有样本"""
+    print(f"\n{'#'*80}")
     print(f"# 📁 {stage_name.upper()} 阶段结果目录: {directory}")
     print(f"{'#'*80}\n")
     
     if not os.path.exists(directory):
         print(f"⚠️  目录不存在: {directory}")
-        return
+        return None
     
     pkl_files = load_pkl_files(directory)
     
     if not pkl_files:
         print(f"⚠️  目录中没有找到pkl文件")
-        return
+        return None
     
     print(f"📦 找到 {len(pkl_files)} 个pkl文件\n")
     
-    # 统计信息
-    stats = {
-        'total_samples': 0,
-        'has_chain': 0,
-        'has_critique': 0,
-        'has_judge': 0,
-        'has_tree': 0,
-        'avg_chain_length': 0,
-        'correct_predictions': 0,
-        'total_predictions': 0,
-        'operation_types': defaultdict(int),
-        'label_distribution': {0: 0, 1: 0}
-    }
-
     # 加载并分析每个样本
     samples = []
     
@@ -205,135 +205,156 @@ def analyze_directory(directory, stage_name, max_samples=3):
                     for sample in data:
                         if isinstance(sample, dict):
                             samples.append(sample)
-                            stats['total_samples'] += 1
                 # 处理单个sample
                 elif isinstance(data, dict):
                     samples.append(data)
-                    stats['total_samples'] += 1
                 # 处理tuple
                 elif isinstance(data, tuple) and len(data) >= 1:
                     sample = data[0] if isinstance(data[0], dict) else data
                     samples.append(sample)
-                    stats['total_samples'] += 1
         except Exception as e:
             print(f"❌ 加载 final_result.pkl 时出错: {e}")
+            return None
     else:
         # 从cache目录逐个加载
         for pkl_file in pkl_files[:]:
             try:
                 with open(pkl_file, 'rb') as f:
                     data = pickle.load(f)
-                    # 处理thought阶段的dict结构
+                    # 处理dict结构
                     if isinstance(data, dict):
                         sample = data
                         samples.append(sample)
-                        stats['total_samples'] += 1
                     # 处理tuple结构
                     elif isinstance(data, tuple) and len(data) >= 1:
                         sample = data[0] if isinstance(data[0], dict) else data
                         samples.append(sample)
-                        stats['total_samples'] += 1
                     # 处理list结构
                     elif isinstance(data, list):
                         for item in data:
                             if isinstance(item, dict):
                                 samples.append(item)
-                                stats['total_samples'] += 1
             except Exception as e:
                 print(f"❌ 加载文件 {pkl_file} 时出错: {e}")
     
+    if not samples:
+        print(f"⚠️  没有加载到任何样本")
+        return None
+    
+    print(f"✅ 成功加载 {len(samples)} 个样本\n")
+    return samples
+
+
+def analyze_samples(samples, stage_name):
+    """分析样本并返回统计信息"""
+    if not samples:
+        return None
+    
+    stats = {
+        'total_samples': len(samples),
+        'has_chain': 0,
+        'has_critique': 0,
+        'has_judge': 0,
+        'has_tree': 0,
+        'avg_chain_length': 0,
+        'operation_types': defaultdict(int),
+        'answer_length_distribution': defaultdict(int),
+    }
+    
     # 统计所有样本
     for sample in samples:
-        features = analyze_sample(sample)
+        # 处理sample可能是dict或tuple的情况
+        if isinstance(sample, tuple) and len(sample) >= 1:
+            sample = sample[0] if isinstance(sample[0], dict) else sample
         
-        if features['chain_length'] > 0:
+        # 分析操作链
+        chain = sample.get('chain', [])
+        chain_length = len(chain)
+        
+        if chain_length > 0:
             stats['has_chain'] += 1
-            stats['avg_chain_length'] += features['chain_length']
+            stats['avg_chain_length'] += chain_length
             
             # 统计操作类型
-            for op in features['chain_operations']:
-                stats['operation_types'][op] += 1
+            for op in chain:
+                op_name = op.get('operation_name', 'Unknown')
+                stats['operation_types'][op_name] += 1
         
-        if features['has_critique']:
+        # 统计Critic结果（Refine阶段特有）
+        if 'critique' in sample:
             stats['has_critique'] += 1
         
-        if features['has_judge']:
+        # 统计Judge结果（Refine阶段特有）
+        if 'judge' in sample:
             stats['has_judge'] += 1
         
-        if features['has_tree']:
+        # 统计Tree结果（Refine阶段特有）
+        if 'tree' in sample:
             stats['has_tree'] += 1
-
-        # 统计标签分布
-        stats['label_distribution'][features['label']] += 1
         
-        # 统计预测正确性
-        if 'chain' in sample and sample['chain']:
-            last_op = sample['chain'][-1]
-            if 'parameter_and_conf' in last_op:
-                prediction = last_op['parameter_and_conf'][0][0].lower()
-                label = sample.get('label', -1)
-                if (prediction == 'yes' and label == 1) or (prediction == 'no' and label == 0):
-                    stats['correct_predictions'] += 1
-                stats['total_predictions'] += 1
+        # 统计答案长度分布
+        if chain and 'parameter_and_conf' in chain[-1]:
+            predicted_answer = chain[-1]['parameter_and_conf'][0][0]
+            answer_length = len(predicted_answer)
+            if answer_length <= 10:
+                stats['answer_length_distribution']['1-10'] += 1
+            elif answer_length <= 50:
+                stats['answer_length_distribution']['11-50'] += 1
+            elif answer_length <= 100:
+                stats['answer_length_distribution']['51-100'] += 1
+            else:
+                stats['answer_length_distribution']['100+'] += 1
     
     # 计算平均值
     if stats['has_chain'] > 0:
         stats['avg_chain_length'] = stats['avg_chain_length'] / stats['has_chain']
     
-    accuracy = stats['correct_predictions'] / stats['total_predictions'] if stats['total_predictions'] > 0 else 0
+    return stats
+
+
+def calculate_accuracy(samples, strategy="top", tagged_dataset_path='thought/TableQA/data/wikitq/tagged_data'):
+    """使用evaluate.py中的函数计算准确率"""
+    try:
+        accuracy = wikitq_match_func_for_samples(samples, strategy, tagged_dataset_path)
+        return accuracy
+    except Exception as e:
+        print(f"⚠️  计算准确率时出错: {e}")
+        return 0.0
+
+
+def display_stats(stats, stage_name, accuracy=None):
+    """显示统计信息"""
+    if not stats:
+        return
     
-    # 显示统计信息
     print(f"📈 统计信息 (基于 {stats['total_samples']} 个样本):")
-    print(f"  总文件数: {len(pkl_files)}")
     print(f"  已分析样本数: {stats['total_samples']}")
     print(f"  有推理链: {stats['has_chain']}")
     print(f"  有Critic分析: {stats['has_critique']}")
     print(f"  有Judge分析: {stats['has_judge']}")
     print(f"  有Tree分析: {stats['has_tree']}")
     print(f"  平均链长度: {stats['avg_chain_length']:.2f} 步")
-    print(f"  预测准确率: {accuracy:.2%}")
-    print(f"\n  标签分布:")
-    print(f"    正确 (label=1): {stats['label_distribution'][1]}")
-    print(f"    错误 (label=0): {stats['label_distribution'][0]}")
+    
+    if accuracy is not None:
+        print(f"  预测准确率: {accuracy:.4f}")
+    else:
+        print(f"  ⚠️  未加载标签数据或样本ID不匹配，无法计算准确率")
+    
+    print(f"\n  答案长度分布:")
+    for length_range, count in sorted(stats['answer_length_distribution'].items()):
+        percentage = count / stats['total_samples'] * 100 if stats['total_samples'] > 0 else 0
+        print(f"    {length_range} 字符: {count} ({percentage:.1f}%)")
     
     print(f"\n  操作类型分布:")
     for op_type, count in sorted(stats['operation_types'].items(), key=lambda x: -x[1]):
         print(f"    {op_type}: {count}")
-    
-    # 显示详细样本
-    # print(f"\n{'='*80}")
-    # print(f"📝 详细样本展示 (前 {min(max_samples, len(samples))} 个)")
-    # print(f"{'='*80}")
-    
-    # for i, sample in enumerate(samples):
-    #     display_sample_summary(sample, f"{stage_name} 样本 {i+1}")
-    #     print()
 
 
-def compare_stages(stages=None):
-    """比较三个阶段的结果"""
+def compare_stages(stages):
+    """比较两个阶段的结果"""
     print(f"\n\n{'█'*80}")
-    print(f"🔄 三个阶段对比分析")
+    print(f"🔄 两个阶段对比分析")
     print(f"{'█'*80}\n")
-    
-    if stages is None:
-        stages = [
-            {
-                'name': 'Thought',
-                'directory': 'results/thought/tabfact/cache',
-                'desc': '初始推理阶段 - 生成推理链'
-            },
-            {
-                'name': 'Critic',
-                'directory': 'results/critic/tabfact/cache',
-                'desc': '批评分析阶段 - 识别推理错误'
-            },
-            {
-                'name': 'Refine',
-                'directory': 'results/refine/tabfact/cache',
-                'desc': '改进优化阶段 - 修正推理链'
-            }
-        ]
     
     # 收集各阶段数据
     stage_data = {}
@@ -406,45 +427,144 @@ def compare_stages(stages=None):
 def main():
     """主函数"""
     print("\n" + "="*80)
-    print("🎯 Table-Critic 结果可视化工具")
+    print("🎯 WikiTableQuestions 结果对比可视化工具")
     print("="*80)
-    print("\n本工具用于可视化三个阶段（Thought、Critic、Refine）的数据特征\n")
+    print("\n本工具用于对比 Thought 和 Refine 两个阶段的结果\n")
     
+    # 设置路径
+    thought_path = '/home/ubuntu/mnt/lx/Table-Critic/results/thought/wikitq/qwen3:32b/cache'
+    refine_path = '/home/ubuntu/mnt/lx/Table-Critic/results/refine/wikitq/qwen3:32b/cache'
+    tagged_data_path = 'thought/TableQA/data/wikitq/tagged_data'
 
     stages = [
-            {
-                'name': 'Thought',
-                'directory': '/home/ubuntu/mnt/lx/Table-Critic/results/thought/wikitq/qwen3:32b/cache',
-                'desc': '初始推理阶段 - 生成推理链'
-            },
-            # {
-            #     'name': 'Critic',
-            #     'directory': 'results/critic/tabfact/cache',
-            #     'desc': '批评分析阶段 - 识别推理错误'
-            # },
-            {
-                'name': 'Refine',
-                'directory': '/home/ubuntu/mnt/lx/Table-Critic/results/refine/wikitq/qwen3:32b/cache',
-                'desc': '改进优化阶段 - 修正推理链'
-            }
-        ]
-    # 比较三个阶段
+        {
+            'name': 'Thought',
+            'directory': thought_path,
+            'desc': '初始推理阶段 - 生成推理链'
+        },
+        {
+            'name': 'Refine',
+            'directory': refine_path,
+            'desc': '改进优化阶段 - 修正推理链'
+        }
+    ]
+    
+    # 比较两个阶段
     compare_stages(stages)
     
-    # 分析每个阶段（显示前2个样本）
-
-    stages = [
-        ('Thought', '/home/ubuntu/mnt/lx/Table-Critic/results/thought/tabfact/qwen3:32b/cache'),
-        # ('Critic', 'results/critic/tabfact/cache'),
-        ('Refine', '/home/ubuntu/mnt/lx/Table-Critic/results/refine/tabfact/qwen3:32b/cache')
-    ]
-    for stage_name, directory in stages:
-        if os.path.exists(directory):
-            analyze_directory(directory, stage_name, max_samples=5)
+    # 加载并分析每个阶段
+    results = {}
+    for stage in stages:
+        stage_name = stage['name']
+        directory = stage['directory']
+        
+        samples = load_samples_from_directory(directory, stage_name)
+        
+        if samples:
+            stats = analyze_samples(samples, stage_name)
+            # display_stats(stats, stage_name)
+            
+            # 计算准确率
+            print(f"\n📊 计算准确率...")
+            accuracy = calculate_accuracy(samples, strategy="top", tagged_dataset_path=tagged_data_path)
+            
+            # 重新显示包含准确率的统计信息
+            print(f"\n{'='*80}")
+            display_stats(stats, stage_name, accuracy)
+            
+            results[stage_name] = {
+                'accuracy': accuracy,
+                'correct': int(accuracy * len(samples)),
+                'total': len(samples),
+                'stats': stats
+            }
         else:
-            print(f"\n⚠️  目录不存在: {directory}")
+            print(f"\n⚠️  目录不存在或分析失败: {directory}")
     
-    print(f"\n{'='*80}")
+    # 显示准确率对比
+    if 'Thought' in results and 'Refine' in results:
+        print(f"\n\n{'█'*80}")
+        print(f"📊 准确率对比")
+        print(f"{'█'*80}\n")
+        
+        print(f"{'阶段':<20} {'准确率':<15} {'正确数':<15} {'总数':<15}")
+        print(f"{'-'*80}")
+        
+        for stage_name in ['Thought', 'Refine']:
+            if stage_name in results:
+                r = results[stage_name]
+                print(f"{stage_name:<20} {r['accuracy']:.4f}        {r['correct']:<15} {r['total']:<15}")
+        
+        print(f"{'-'*80}\n")
+        
+        # 显示前2个样本的详细信息
+        print(f"\n{'█'*80}")
+        print(f"📝 详细样本展示 (前2个)")
+        print(f"{'█'*80}\n")
+        
+        for stage in stages:
+            stage_name = stage['name']
+            directory = stage['directory']
+            
+            samples = load_samples_from_directory(directory, stage_name)
+            
+            if samples:
+                # 显示前2个样本
+                for i in range(min(2, len(samples))):
+                    display_sample_summary(samples[i], f"{stage_name} 样本 {i+1}")
+            else:
+                print(f"\n⚠️  无法加载样本: {directory}")
+        
+        # 计算准确率提升
+        thought_acc = results['Thought']['accuracy']
+        refine_acc = results['Refine']['accuracy']
+        improvement = refine_acc - thought_acc
+        improvement_pct = (improvement / thought_acc * 100) if thought_acc > 0 else 0
+        
+        print(f"📈 准确率提升:")
+        print(f"  Thought: {thought_acc:.4f}")
+        print(f"  Refine:  {refine_acc:.4f}")
+        print(f"  提升:    {improvement:+.4f} ({improvement_pct:+.2f}%)\n")
+        
+        # 显示操作类型对比
+        print(f"\n{'█'*80}")
+        print(f"📊 操作类型对比")
+        print(f"{'█'*80}\n")
+        
+        thought_ops = results['Thought']['stats']['operation_types']
+        refine_ops = results['Refine']['stats']['operation_types']
+        
+        all_ops = set(thought_ops.keys()) | set(refine_ops.keys())
+        
+        print(f"{'操作类型':<30} {'Thought':<15} {'Refine':<15} {'变化':<15}")
+        print(f"{'-'*80}")
+        
+        for op_type in sorted(all_ops):
+            thought_count = thought_ops.get(op_type, 0)
+            refine_count = refine_ops.get(op_type, 0)
+            change = refine_count - thought_count
+            change_str = f"{change:+d}" if change != 0 else "0"
+            
+            print(f"{op_type:<30} {thought_count:<15} {refine_count:<15} {change_str:<15}")
+        
+        print(f"{'-'*80}\n")
+        
+        # 显示推理链长度对比
+        print(f"\n{'█'*80}")
+        print(f"📊 推理链长度对比")
+        print(f"{'█'*80}\n")
+        
+        thought_avg_len = results['Thought']['stats']['avg_chain_length']
+        refine_avg_len = results['Refine']['stats']['avg_chain_length']
+        len_change = refine_avg_len - thought_avg_len
+        
+        print(f"{'阶段':<20} {'平均链长度':<20} {'变化':<20}")
+        print(f"{'-'*80}")
+        print(f"{'Thought':<20} {thought_avg_len:.2f} {'':<20}")
+        print(f"{'Refine':<20} {refine_avg_len:.2f} {len_change:+.2f}")
+        print(f"{'-'*80}\n")
+    
+    print(f"{'='*80}")
     print("✅ 分析完成！")
     print(f"{'='*80}\n")
 

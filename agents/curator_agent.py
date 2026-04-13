@@ -34,7 +34,7 @@ class CuratorAgent(BaseAgent):
     the evolutionary memory structure.
     """
 
-    def __init__(self, llm, memory_path: str = "critic/TableQA/tools/few_shot_critic.json"):
+    def __init__(self, llm, memory_path: str = None):
         """
         Initialize the CuratorAgent.
 

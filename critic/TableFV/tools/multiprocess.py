@@ -113,7 +113,7 @@ def critic_exec_one_sample(
                 few_shot += f"Example {idx+1}:\n" + str(shot) + "\n\n\n"
     else:
         # 没有预检索数据，从 JSON 文件检索（向后兼容）
-        few_shot = get_critic_few_shot(error_route, few_shot_json="critic/TableFV/tools/few_shot_critic.json",selected_blueprint=blueprint_only)
+        few_shot = get_critic_few_shot(error_route, few_shot_json=None, selected_blueprint=blueprint_only)
     
     prompt += few_shot
 

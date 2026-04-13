@@ -9,6 +9,9 @@ from collections import defaultdict
 import pickle
 import os
 
+# 统一的错误树 JSON 路径
+CRITIC_TREE_JSON = "critic/TableQA/tools/few_shot_critic.json"
+
 import multiprocessing as mp
 
 from operations import *
@@ -1032,7 +1035,7 @@ def _judge_critic_refine_with_cache_mp_core(arg):
                         
                         if judge == '[Correct]':
                             current_stage = f"loop_{loop_count}_update_tree"
-                            update_error_tree(critic_sample, error_route, error_tree_json="critic/TableQA/tools/few_shot_critic.json", llm=llm, llm_options=llm_options, lock=lock)
+                            update_error_tree(critic_sample, error_route, error_tree_json=CRITIC_TREE_JSON, llm=llm, llm_options=llm_options, lock=lock, use_blueprint=False)
                             break       
                     else:
                         current_stage = f"loop_{loop_count}_no_incorrect_step"

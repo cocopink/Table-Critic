@@ -8,7 +8,7 @@ import pickle
 
 if __name__ == "__main__":
     data_type = "FV"
-    data_file = "/home/ubuntu/mnt/lx/new_TC/Table-Critic/results/thought/tabfact/qwen3:14b/final_result.pkl" #final_results.pkl
+    data_file = "/home/ubuntu/mnt/lx/new_TC/Table-Critic/results/thought_100/tabfact/qwen-plus/final_result.pkl" #final_results.pkl
     ans_list = read_pkl(data_file)
 
     if data_type == "FV":

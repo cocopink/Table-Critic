@@ -123,7 +123,7 @@ def return_error_shot(
 
 def get_critic_few_shot(
     error_route: str,
-    few_shot_json: str = "critic/TableFV/tools/few_shot_critic.json",
+    few_shot_json: str = None,
     selected_blueprint: bool = False
 ) -> str:
     """
@@ -180,7 +180,7 @@ class RetrieverAgent(BaseAgent):
     def __init__(
         self,
         llm=None,
-        memory_path: str = "critic/TableFV/tools/few_shot_critic.json"
+        memory_path: str = None
     ):
         """
         初始化 RetrieverAgent

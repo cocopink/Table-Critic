@@ -64,7 +64,7 @@ class ActiveForgettingManager:
 
     def __init__(
         self,
-        memory_path: str = "critic/TableQA/tools/few_shot_critic.json",
+        memory_path: str = None,
         confidence_threshold: float = 0.3,
         decay_rate: float = 0.05,
         max_cases_per_category: int = 50

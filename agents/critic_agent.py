@@ -37,7 +37,7 @@ class CriticAgent(BaseAgent):
     feedback for improvement.
     """
 
-    def __init__(self, llm, memory_path: str = "critic/TableQA/tools/few_shot_critic.json"):
+    def __init__(self, llm, memory_path: str = None):
         """
         Initialize the CriticAgent.
 

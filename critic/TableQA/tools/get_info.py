@@ -227,7 +227,8 @@ def get_cot_for_tree(sample):
 
     cot = "Now, identify which step within the reasoning process is incorrect, give an analysis and give a conclusion according to the format 'Conclusion: (ERROR ROUTE)' or 'Conclusion: [Incorrect] (random)': \n"
     
-    with open("critic/TableQA/tools/few_shot_critic.json", "r") as file:
+    from tools import CRITIC_TREE_JSON
+    with open(CRITIC_TREE_JSON, "r") as file:
         error_tree = json.load(file)
     modified_error_tree = replace_leaves_with_end(error_tree)
 
@@ -295,7 +296,10 @@ Original Table:\n/*\n"""
 
     return cot
 
-def get_critic_few_shot(error_route, few_shot_json= "critic_few_shot.json",selected_blueprint = False):
+def get_critic_few_shot(error_route, few_shot_json=None, selected_blueprint=False):
+    if few_shot_json is None:
+        from tools import CRITIC_TREE_JSON
+        few_shot_json = CRITIC_TREE_JSON
     few_shot = "\nHere are some examples.\n\n"
 
     with open(few_shot_json, 'r') as f:

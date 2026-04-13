@@ -6,6 +6,6 @@ def read_pkl(pkl_file):
     return data
 
 if __name__ == "__main__":
-    file = "/home/ubuntu/mnt/lx/new_TC/Table-Critic/results/thought/tabfact/qwen2.5-72b-instruct/cache/case-0khu"
+    file = "/home/ubuntu/mnt/lx/new_TC/Table-Critic/results/thought_100/tabfact/gpt-5.4/final_result.pkl"
     data = read_pkl(file)
     print(type(data),len(data),data[0])

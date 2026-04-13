@@ -7,3 +7,5 @@ siliconflow.txt
 .idea/
 .claude/
 api.txt
+.out
+nohup.out

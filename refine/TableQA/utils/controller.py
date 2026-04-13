@@ -28,6 +28,9 @@ from contextlib import nullcontext
 # DEBUG = os.environ.get("CONTROLLER_DEBUG", "false").lower() == "true"
 DEBUG = True
 
+# 统一的错误树 JSON 路径
+CRITIC_TREE_JSON = "critic/TableQA/tools/few_shot_critic.json"
+
 
 # ==================== 1. ControllerState 数据类 ====================
 
@@ -403,7 +406,7 @@ Output JSON: {{"action": "...", "reason": "...", "confidence": 0.0-1.0}}"""
                 else:
                     # 向后兼容：如果没有传入 retriever，创建临时实例
                     from agents import RetrieverAgent
-                    retriever = RetrieverAgent(memory_path="critic/TableQA/tools/few_shot_critic.json")
+                    retriever = RetrieverAgent(memory_path=CRITIC_TREE_JSON)
                     result = retriever.retrieve_by_route(state.error_route)
                 
                 # 存储完整结果到 state，避免后续重复检索
@@ -664,7 +667,7 @@ class EnhancedController(MinimalController):
                     result = self.retriever.retrieve_by_route(state.error_route)
                 else:
                     from agents import RetrieverAgent
-                    retriever = RetrieverAgent(memory_path="critic/TableQA/tools/few_shot_critic.json")
+                    retriever = RetrieverAgent(memory_path=CRITIC_TREE_JSON)
                     result = retriever.retrieve_by_route(state.error_route)
                 
                 # 存储完整结果到 state
@@ -869,7 +872,7 @@ class ActionExecutor:
         from agents import RetrieverAgent
         self.retriever = RetrieverAgent(
             llm=llm,
-            memory_path="critic/TableQA/tools/few_shot_critic.json"
+            memory_path=CRITIC_TREE_JSON
         )
     
     def execute(self, state: ControllerState, decision: Decision) -> ControllerState:
@@ -1043,10 +1046,11 @@ class ActionExecutor:
             update_error_tree(
                 state.sample,
                 state.error_route or "random",
-                error_tree_json="critic/TableQA/tools/few_shot_critic.json",
+                error_tree_json=CRITIC_TREE_JSON,
                 llm=self.llm,
                 llm_options=self.llm_options,
-                lock=nullcontext()
+                lock=nullcontext(),
+                use_blueprint=True
             )
             print(f"[DEBUG UPDATE_TREE] Finished update_error_tree call")
         
@@ -1085,7 +1089,21 @@ def load_clarifier_info(sample: Dict[str, Any], cache_dir: Optional[str] = None,
     # 策略1: 从 sample 中读取
     if 'clarifier' in sample and bool(sample.get('clarifier')):
         return sample['clarifier']
-    
+
+    # 策略1.3: 从用户提供的 thought_results_dir 读取 clarifier
+    if thought_results_dir and sample_idx is not None:
+        try:
+            thought_clarifier_dir = os.path.join(thought_results_dir, 'clarifier')
+            clarifier_file = os.path.join(thought_clarifier_dir, f"case_dict_test-{sample_idx}.pkl")
+            if os.path.exists(clarifier_file):
+                with open(clarifier_file, 'rb') as f:
+                    clarifier_data = pickle.load(f)
+                    if DEBUG:
+                        print(f"[DEBUG CLARIFIER] Loaded from {clarifier_file}")
+                    return clarifier_data
+        except Exception as e:
+            print(f"[WARNING] Failed to load clarifier from thought_results_dir: {e}")
+
     # 策略1.5: 从 cache_dir 推断 Thought 阶段的 clarifier 目录读取
     # cache_dir 格式: results/refine_clarifier/{dataset}/{model}/{timestamp}/cache
     # thought_clarifier_dir 格式: results/thought/{dataset}/{model}/clarifier
@@ -1099,17 +1117,17 @@ def load_clarifier_info(sample: Dict[str, Any], cache_dir: Optional[str] = None,
             # if DEBUG:
             #     print(f"[CLARIFIER DEBUG] cache_dir parts: {parts}")
             #     print(f"[CLARIFIER DEBUG] len(parts): {len(parts)}, parts[1]: {parts[1] if len(parts) > 1 else 'N/A'}")
-            
+
             if len(parts) >= 5 and parts[1] == 'refine_clarifier':
                 # 构建thought_clarifier_dir: results/thought/{dataset}/{model}/clarifier
                 thought_clarifier_dir = os.path.join('results', 'thought', parts[2], parts[3], 'clarifier')
                 clarifier_file = os.path.join(thought_clarifier_dir, f"case_dict_test-{sample_idx}.pkl")
-                
+
                 # if DEBUG:
                 #     print(f"[CLARIFIER DEBUG] Inferred thought_clarifier_dir: {thought_clarifier_dir}")
                 #     print(f"[CLARIFIER DEBUG] Looking for clarifier file: {clarifier_file}")
                 #     print(f"[CLARIFIER DEBUG] File exists: {os.path.exists(clarifier_file)}")
-                
+
                 if os.path.exists(clarifier_file):
                     with open(clarifier_file, 'rb') as f:
                         clarifier_data = pickle.load(f)
@@ -1118,7 +1136,7 @@ def load_clarifier_info(sample: Dict[str, Any], cache_dir: Optional[str] = None,
                     return clarifier_data
         except Exception as e:
             print(f"[WARNING] Failed to load clarifier from inferred Thought stage directory: {e}")
-    
+
     # 策略2: 输出警告并返回空字典
     print(f"[WARNING] No clarifier info found for sample {sample.get('id', 'unknown')}")
     return {}

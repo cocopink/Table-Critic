@@ -9,6 +9,9 @@ from collections import defaultdict
 import pickle
 import os
 
+# 统一的错误树 JSON 路径
+CRITIC_TREE_JSON = "critic/TableFV/tools/few_shot_critic.json"
+
 import multiprocessing as mp
 
 from operations import *
@@ -1034,7 +1037,7 @@ def _judge_critic_refine_with_cache_mp_core_test(arg):
             judge = judge_sample['judge'].strip()
             proc_sample = judge_sample
             if  '[Correct]' in judge:
-                update_error_tree(critic_sample, error_route, error_tree_json="critic/TableFV/tools/few_shot_critic.json", llm=llm, llm_options=llm_options, lock=lock)         
+                update_error_tree(critic_sample, error_route, error_tree_json=CRITIC_TREE_JSON, llm=llm, llm_options=llm_options, lock=lock, use_blueprint=False)         
         pickle.dump((proc_sample), open(cache_path, "wb"))
         return idx, proc_sample
     except Exception as e:
@@ -1099,7 +1102,7 @@ def _judge_critic_refine_with_cache_mp_core_test(arg):
 #                         judge = judge_sample['judge'].strip()
 #                         proc_sample = judge_sample
 #                         if  '[Correct]' in judge:
-#                             update_error_tree(critic_sample, error_route, error_tree_json="critic/TableFV/tools/few_shot_critic.json", llm=llm, llm_options=llm_options, lock=lock)
+#                             update_error_tree(critic_sample, error_route, error_tree_json=CRITIC_TREE_JSON, llm=llm, llm_options=llm_options, lock=lock, use_blueprint=False)
 #                             break       
 #                     else:
 #                         proc_sample = critic_sample
@@ -1185,7 +1188,7 @@ def _judge_critic_refine_with_cache_mp_core(arg):
                         
                         if '[Correct]' in judge:
                             current_stage = f"loop_{loop_count}_update_tree"
-                            update_error_tree(critic_sample, error_route, error_tree_json="critic/TableFV/tools/few_shot_critic.json", llm=llm, llm_options=llm_options, lock=lock)
+                            update_error_tree(critic_sample, error_route, error_tree_json=CRITIC_TREE_JSON, llm=llm, llm_options=llm_options, lock=lock, use_blueprint=False)
                             break       
                     else:
                         current_stage = f"loop_{loop_count}_no_incorrect_step"

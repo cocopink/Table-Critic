@@ -562,7 +562,10 @@ row_error_blueprint = ['The reasoning step omitted relevant rows that satisfied 
 column_error_blueprint = ['The reasoning step incorrectly filtered out the column needed to answer the question.']
 query_error_blueprint = ['The reasoning step made a calculation error when summing or averaging the values.']
 
-def critic_tree_init(file_path = "critic/TableQA/tools/few_shot_critic.json"):
+def critic_tree_init(file_path = None):
+    if file_path is None:
+        from tools import CRITIC_TREE_JSON
+        file_path = CRITIC_TREE_JSON
 
     data_dict = {
         "sub-table error":[{

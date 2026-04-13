@@ -34,7 +34,7 @@ class MemoryEvolutionManager:
     def __init__(
         self,
         llm,
-        memory_path: str = "critic/TableQA/tools/few_shot_critic.json",
+        memory_path: str = None,
         confidence_threshold: float = 0.3,
         max_cases_per_category: int = 50
     ):

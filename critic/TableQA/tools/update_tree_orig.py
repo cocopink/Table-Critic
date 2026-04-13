@@ -174,56 +174,7 @@ def format_list_to_string(lst):
     result += ']'
     return result
 
-# ========== 新模式函数（blueprint + dict 格式）==========
-
-def vertical_expansion(few_shot, template_dict, error_type, parent_node, llm, llm_options):
-    prompt = ""
-    prompt += vertical_expansion_few_shot
-    prompt += "Now, determine whether the two lists below can be meaningfully split into two distinct subcategories.\n"
-    prompt += f"Parent Category: {error_type}\n\n"
-    prompt += f"List 1: {format_list_to_string(random.sample(few_shot, min(5, len(few_shot))))}\n"
-    prompt += f"List 2: {format_list_to_string([template_dict['content']])}\n\n"
-    prompt += "Explanation:\n"
-    responses = llm.generate_plus_with_score(prompt, options=llm_options)
-    names = re.findall(r'<(.*?)>', responses[0][0])
-    if len(names) == 2 and names[0] != names[1]:
-        parent_node[error_type] = {
-            names[0]:few_shot,
-            names[1]:[template_dict]
-        }
-    else:
-        few_shot.append(template_dict)
-
-def horizontal_expansion(few_shot_dict, template_dict, llm, llm_options):
-    prompt = ""
-    prompt += horizontal_expansion_few_shot
-    prompt += "Now, given the error tree and the template, if the error path corresponding to the template cannot be found in the error tree, extend the error tree by adding a new branch at the appropriate location.\n"
-    modified_error_tree = replace_leaves_with_end(few_shot_dict)
-    prompt += f"Error Tree:\n{modified_error_tree}\n\n"
-    prompt += f"Template:\n{template_dict['content']}\n\n"
-    prompt += "Explanation:\n"
-    responses = llm.generate_plus_with_score(prompt, options=llm_options)
-    if "Addition" in responses[0][0]:
-        route = re.findall(r'\((.*?)\)', responses[0][0].split("Addition:")[-1])
-        if route:
-            route = route[0]
-        if '->' in route:
-            route = route.split('->')
-            few_shot = few_shot_dict
-            for error_type in route:
-                error_type = error_type.strip()
-                if error_type in few_shot:
-                    few_shot = few_shot[error_type]
-                elif error_type != '<END>' and isinstance(few_shot, dict):
-                    few_shot[error_type] = [template_dict]
-                    break
-                else:
-                    break
-
-# ========== 原始模式函数（纯字符串格式）==========
-
-def _vertical_expansion_orig(few_shot, critic_template, error_type, parent_node, llm, llm_options):
-    """原始模式：直接使用 critic_template 纯字符串，不生成 blueprint"""
+def vertical_expansion(few_shot, critic_template, error_type, parent_node, llm, llm_options):
     prompt = ""
     prompt += vertical_expansion_few_shot
     prompt += "Now, determine whether the two lists below can be meaningfully split into two distinct subcategories.\n"
@@ -239,10 +190,9 @@ def _vertical_expansion_orig(few_shot, critic_template, error_type, parent_node,
             names[1]:[critic_template]
         }
     else:
-        few_shot.append(critic_template)
+        few_shot = few_shot.append(critic_template)
 
-def _horizontal_expansion_orig(few_shot_dict, critic_template, llm, llm_options):
-    """原始模式：直接使用 critic_template 纯字符串，不生成 blueprint"""
+def horizontal_expansion(few_shot_dict, critic_template, llm, llm_options):
     prompt = ""
     prompt += horizontal_expansion_few_shot
     prompt += "Now, given the error tree and the template, if the error path corresponding to the template cannot be found in the error tree, extend the error tree by adding a new branch at the appropriate location.\n"
@@ -268,8 +218,7 @@ def _horizontal_expansion_orig(few_shot_dict, critic_template, llm, llm_options)
                 else:
                     break
 
-def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lock, use_blueprint=True):
-    # --- 构建 critic_template（两种模式共用） ---
+def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lock):
     critic_template = ""
     critic_template += "Original Table:\n/*\n" + table2string(sample['table_text']) + "\n*/\n\n"
     critic_template += "Question: \n" +  sample['statement'] + "\n\n"
@@ -320,49 +269,15 @@ def update_error_tree(sample, error_route, error_tree_json, llm, llm_options, lo
             for row in group_rows:
                 critic_template += " | ".join(row) + "\n"
             critic_template += "*/\n"
-
+    
     critic_template += f"{thought_log[-1]}\n\n"
 
-    cotable_result = table_log[-1]["cotable_result"]
-    if isinstance(cotable_result, dict):
-        cotable_result = str(cotable_result)
-    critic_template += "Prediction Answer: \n" + cotable_result.lower() + "\n\n"
+    critic_template += "Prediction Answer: \n" + table_log[-1]["cotable_result"].lower() + "\n\n"
 
     critic_template += "Critique:\n" + sample["critique"]  + "\n\n"
 
     critic_template += "Conclusion:\n" + sample["conclusion"]
 
-    # --- 模式分支：blueprint vs 原始 ---
-    if use_blueprint:
-        # 新模式：生成 blueprint，构建 template_dict
-        blueprint_prompt = """You are given a critique of a table reasoning error. Your task is to summarize the error in one concise sentence (blueprint) that captures the essence of what went wrong.
-
-Critique:
-{critique}
-
-Provide only the blueprint sentence, nothing else."""
-
-        blueprint_response = llm.generate_plus_with_score(
-            blueprint_prompt.format(critique=sample["critique"]),
-            options=llm.get_model_options(temperature=0, per_example_max_decode_steps=50)
-        )
-        blueprint = blueprint_response[0][0].strip()
-
-        confidence_score = sample.get('confidence_score', 1.0)
-
-        template_dict = {
-            "blueprint": blueprint,
-            "content": critic_template
-        }
-
-        vert_fn = vertical_expansion
-        horiz_fn = horizontal_expansion
-        template_item = template_dict
-    else:
-        # 原始模式：直接使用纯字符串 critic_template
-        vert_fn = _vertical_expansion_orig
-        horiz_fn = _horizontal_expansion_orig
-        template_item = critic_template
 
     with lock:
         try:
@@ -372,21 +287,18 @@ Provide only the blueprint sentence, nothing else."""
             if error_route != 'random':
                 error_route = error_route.split('->')
                 few_shot = few_shot_dict
-                changed = False
                 for error_type in error_route:
                     error_type = error_type.strip()
                     if error_type in few_shot:
                         parent_node = few_shot
                         few_shot = few_shot[error_type]
-                        if isinstance(few_shot, list):
-                            vert_fn(few_shot, template_item, error_type, parent_node, llm=llm, llm_options=llm_options)
-                            changed = True
+                        if isinstance(few_shot,list):
+                            vertical_expansion(few_shot, critic_template, error_type, parent_node, llm=llm, llm_options=llm_options)
                             break
-                if not changed:
-                    horiz_fn(few_shot_dict, template_item, llm, llm_options)
             else:
-                horiz_fn(few_shot_dict, template_item, llm, llm_options)
-
+                horizontal_expansion(few_shot_dict, critic_template, llm, llm_options)
+            ## 如果不是扩充template，就横向或纵向扩充分支
+            
             with open(error_tree_json, 'w') as f:
                 json.dump(few_shot_dict, f, indent=4)
         finally:
