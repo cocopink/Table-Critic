@@ -74,8 +74,8 @@ def build_wikitq_few_shot_prompt(table_str, question):
     )
     # Example 2: CoT instruction but direct answer (matching Figure 17)
     example_2 = (
-        f"Here is the table to answer this question. Please provide your explanation first, then "
-        f"answer the question in a short phrase starting by 'therefore, the answer is:'\n"
+        # f"Here is the table to answer this question. Please provide your explanation first, then "
+        # f"answer the question in a short phrase starting by 'therefore, the answer is:'\n"
         f"/*\n{WIKITQ_EXAMPLE_TABLE_CYCLIST}\n*/\n"
         f"Question: how many players got less than 10 points?\n"
         f"The answer is: 4.\n"

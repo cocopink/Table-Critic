@@ -6,7 +6,8 @@
       "Bash(python:*)",
       "Bash(python3 -c \"\nimport pickle\nimport os\n\nfile_path = '/home/ubuntu/mnt/lx/new_TC/Table-Critic/results/thought/wikitq/qwen3:32b/cache/case-4133.pkl'\n\nif os.path.exists\\(file_path\\):\n    with open\\(file_path, 'rb'\\) as f:\n        data = pickle.load\\(f\\)\n    \n    print\\(f'File: {file_path}'\\)\n    print\\(f'Type: {type\\(data\\)}'\\)\n    print\\(f'Is None: {data is None}'\\)\n    \n    if data is not None and isinstance\\(data, dict\\):\n        print\\(f'Keys: {list\\(data.keys\\(\\)\\)[:10]}'\\)\n        if 'id' in data:\n            print\\(f'ID: {data[\\\\\"id\\\\\"]}'\\)\nelse:\n    print\\(f'File does not exist: {file_path}'\\)\n\")",
       "mcp__web-reader__webReader",
-      "mcp__plugin_episodic-memory_episodic-memory__search"
+      "mcp__plugin_episodic-memory_episodic-memory__search",
+      "mcp__web-search-prime__web_search_prime"
     ]
   }
 }
