@@ -1,12 +1,26 @@
 # Table-Critic 项目文档
 
-> 最后更新：2026-04-16 00:17:51
+> 最后更新：2026-04-23 00:00:00
 >
 > 论文：Table-Critic: A Multi-Agent Framework for Collaborative Criticism and Refinement in Table Reasoning (ACL 2025)
 
 ---
 
 ## 变更记录 (Changelog)
+
+### 2026-04-23
+- **阶段 C 部分完成**：深度补捞核心算法
+  - 扫描 `agents/dispute_handler.py`：完整的三轮分歧处理机制
+  - 扫描 `thought/TableQA/operations/select_row.py`：行选择与置信度排序
+  - 扫描 `thought/TableQA/operations/group_by.py`：分组聚合与合理性检查
+  - 扫描 `refine/TableQA/utils/constraint_state.py`：四类约束管理系统
+- 更新覆盖率：33% → 37%（105/287 文件）
+- 补充关键算法洞察：
+  - **DisputeHandler**：实现完整的三轮分歧解决（Blueprint → Few-shot → Final Arbitration）
+  - **ConstraintState**：支持行、列、操作、聚合四类约束，可生成自然语言描述
+  - **select_row**：多候选排序与置信度评分，支持 union 合并
+  - **group_by**：包含分组合理性检查（独特值占比 ≤ 80%）
+- 更新 `.claude/index.json`：新增阶段 C 扫描元数据
 
 ### 2026-04-16
 - 初始化项目文档结构
@@ -63,7 +77,7 @@ Table-Critic 是一个基于**博弈论的记忆演化多智能体框架**，用
 │         ▼                                        ▼         │
 │  ┌──────────────┐                        ┌──────────────┐ │
 │  │  Validator   │                        │   Retriever  │ │
-│  │  (审计员)    │                        │  (检索器)    │ │
+│  │  (审计员)    │                        │  (检索器)    │  │
 │  └──────────────┘                        └──────────────┘ │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -132,9 +146,9 @@ graph TD
 
 | 模块 | 路径 | 职责 | 语言 | 状态 |
 |------|------|------|------|------|
-| **Agents** | `agents/` | 多智能体框架核心，9种智能体实现 | Python | ✅ 已扫描 |
-| **Thought** | `thought/` | 初始推理阶段，动态链执行 | Python | ✅ 已扫描 |
-| **Refine** | `refine/` | 修正阶段，Controller驱动 | Python | ✅ 已扫描 |
+| **Agents** | `agents/` | 多智能体框架核心，9种智能体实现 | Python | ✅ 已深度扫描 |
+| **Thought** | `thought/` | 初始推理阶段，动态链执行 | Python | 🔄 部分扫描 |
+| **Refine** | `refine/` | 修正阶段，Controller驱动 | Python | 🔄 部分扫描 |
 | **Critic** | `critic/` | 批评知识库，错误树管理 | Python | ✅ 已扫描 |
 | **Memory** | `memory/` | 记忆演化，主动遗忘 | Python | ✅ 已扫描 |
 | **Other Method** | `other_method/` | 基线方法对比 | Python/Shell | 📝 已清点 |
@@ -370,7 +384,7 @@ Thought (初始推理) → Refine (Controller驱动修正) → Learning (记忆�
 ### 控制逻辑
 
 - `refine/TableQA/utils/controller.py` - Controller 实现
-- `agents/dispute_handler.py` - 分歧处理逻辑
+- `agents/dispute_handler.py` - 分歧处理逻辑（已深度扫描）
 
 ### 知识库
 
@@ -398,29 +412,114 @@ Thought (初始推理) → Refine (Controller驱动修正) → Learning (记忆�
 ### 扫描统计
 
 - **估算总文件数**：287
-- **已扫描文件数**：95
-- **覆盖率**：33%
-- **扫描阶段**：A（全仓清点）+ B（模块扫描）
+- **已扫描文件数**：105
+- **覆盖率**：37%
+- **扫描阶段**：A（全仓清点）+ B（模块扫描）+ C（部分深度补捞）
 
 ### 模块覆盖详情
 
 | 模块 | 接口识别 | 依赖映射 | 关键算法 | 测试覆盖 |
 |------|----------|----------|----------|----------|
 | agents | ✅ | ✅ | ✅ | ❌ |
-| thought | ✅ | ✅ | 📝 | ❌ |
-| refine | ✅ | ✅ | 📝 | ❌ |
+| thought | ✅ | ✅ | 🔄 | ❌ |
+| refine | ✅ | ✅ | 🔄 | ❌ |
 | critic | ✅ | ✅ | 📝 | ❌ |
 | memory | ✅ | ✅ | 📝 | ❌ |
+
+### 阶段 C 新增洞察
+
+#### 1. DisputeHandler（分歧处理器）
+
+**文件**：`agents/dispute_handler.py`
+
+**核心功能**：
+- **三轮分歧处理**：Blueprint → Few-shot → Final Arbitration
+- **状态管理**：`DisputeHistory` 完整记录每轮争议
+- **自动标记**：识别"无法修正"的样本（低置信度 + 多项检查失败）
+
+**关键方法**：
+```python
+def resolve_dispute(sample, error_route) -> Tuple[Dict, DisputeHistory]:
+    """执行完整的三轮分歧解决"""
+    # Round 1: Critic with Validator suggestions
+    # Round 2: Add few-shot learning
+    # Round 3: Final arbitration by Judge
+```
+
+#### 2. ConstraintState（约束状态管理）
+
+**文件**：`refine/TableQA/utils/constraint_state.py`
+
+**四类约束**：
+1. **行约束**：`forbidden_rows` - 禁止选择的行集合
+2. **列约束**：`forbidden_columns` - 禁止选择的列集合
+3. **操作约束**：`forbidden_operations` - 禁止执行的操作序列
+4. **聚合约束**：`aggregation_constraints` - 强制修正的聚合作用域
+
+**特色功能**：
+```python
+def get_constraints_for_prompt(self) -> str:
+    """生成用于prompt的自然语言描述"""
+    # 示例输出：
+    # "DO NOT select the following rows: row 1, row 3
+    #  DO NOT select the following columns: name, age
+    #  Aggregation constraints: group_column should be 'category'"
+```
+
+#### 3. select_row（行选择操作）
+
+**文件**：`thought/TableQA/operations/select_row.py`
+
+**核心特性**：
+- **多候选排序**：基于置信度对多个选择结果排序
+- **Union 合并**：支持合并多个候选（`union_num=2`）
+- **通配符处理**：识别 `*` 并标记为失败
+
+**关键逻辑**：
+```python
+# 置信度累加
+for pred in predictions:
+    pred_conf_dict[pred] += np.exp(score)
+
+# 排序并选择 top-k
+select_row_rank = sorted(pred_conf_dict.items(), key=lambda x: x[1], reverse=True)
+```
+
+#### 4. group_by（分组聚合操作）
+
+**文件**：`thought/TableQA/operations/group_by.py`
+
+**分组合理性检查**：
+```python
+def check_if_group(vs):
+    """检查是否适合分组（独特值占比 ≤ 80%）"""
+    vs_without_empty = [v for v in vs if v.strip()]
+    if len(vs_without_empty):
+        return len(set(vs_without_empty)) / len(vs_without_empty) <= 0.8
+    return False
+```
+
+**分组信息统计**：
+- 统计每个唯一值的出现次数
+- 按频率降序排序
+- 传递给后续操作使用
 
 ### 缺口清单
 
 #### 高优先级（建议下一步扫描）
 
-1. **operations 实现**：`thought/TableQA/operations/*.py`（6个文件）
-2. **约束逻辑**：`refine/TableQA/utils/constraint_*.py`
-3. **分歧处理**：`agents/dispute_handler.py`
-4. **树更新算法**：`critic/TableQA/tools/update_tree.py`
-5. **主动遗忘**：`memory/active_forgetting.py`
+1. **剩余 operations 实现**：
+   - `thought/TableQA/operations/select_column.py`
+   - `thought/TableQA/operations/sort_by.py`
+   - `thought/TableQA/operations/add_column.py`
+   - `thought/TableQA/operations/final_query.py`
+
+2. **约束相关算法**：
+   - `refine/TableQA/utils/constraint_induction.py` - 约束归纳
+   - `refine/TableQA/utils/constraint_aware_chain.py` - 约束感知链
+
+3. **树更新完整实现**：
+   - `critic/TableQA/tools/update_tree.py` - 包含 Blueprint 更新逻辑
 
 #### 中优先级
 
@@ -440,10 +539,10 @@ Thought (初始推理) → Refine (Controller驱动修正) → Learning (记忆�
 
 ### 立即行动
 
-1. **补全核心算法文档**
-   - 深度读取 6 个 operations 文件（select_row, select_column, etc.）
-   - 文档化 Controller 的决策逻辑
-   - 补充分歧处理机制说明
+1. **完成阶段 C 扫描**
+   - 补充剩余 4 个 operations 文档
+   - 扫描 constraint_induction 和 constraint_aware_chain
+   - 深度读取 update_tree.py
 
 2. **建立测试框架**
    - 创建 `tests/` 目录
@@ -493,7 +592,9 @@ Thought (初始推理) → Refine (Controller驱动修正) → Learning (记忆�
 ```bibtex
 @inproceedings{yu-etal-2025-table,
     title = "Table-Critic: A Multi-Agent Framework for Collaborative Criticism and Refinement in Table Reasoning",
-    author = "Yu, Peiying  and Chen, Guoxin  and Wang, Jingjing",
+    author = "Yu, Peiying  and
+      Chen, Guoxin  and
+      Wang, Jingjing",
     booktitle = "Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
     month = jul,
     year = "2025",
@@ -529,13 +630,19 @@ Table-Critic/
 │   ├── validator_agent.py
 │   ├── curator_agent.py
 │   ├── retriever_agent.py
-│   ├── dispute_handler.py
+│   ├── dispute_handler.py     # ✅ 已深度扫描
 │   ├── memory_integration.py
 │   └── active_forgetting.py
 ├── thought/                   # 初始推理阶段
 │   ├── TableQA/
 │   │   ├── main.py
 │   │   ├── operations/
+│   │   │   ├── select_row.py      # ✅ 已深度扫描
+│   │   │   ├── group_by.py        # ✅ 已深度扫描
+│   │   │   ├── select_column.py   # 🔄 待扫描
+│   │   │   ├── sort_by.py         # 🔄 待扫描
+│   │   │   ├── add_column.py      # 🔄 待扫描
+│   │   │   └── final_query.py     # 🔄 待扫描
 │   │   ├── utils/
 │   │   └── data/
 │   └── TableFV/
@@ -548,7 +655,10 @@ Table-Critic/
 │   │   ├── main_constraint_based.py
 │   │   ├── operations/
 │   │   ├── utils/
-│   │   │   └── controller.py  # Controller 实现
+│   │   │   ├── controller.py           # Controller 实现
+│   │   │   ├── constraint_state.py     # ✅ 已深度扫描
+│   │   │   ├── constraint_induction.py # 🔄 待扫描
+│   │   │   └── constraint_aware_chain.py # 🔄 待扫描
 │   │   └── third_party/
 │   └── TableFV/
 │       ├── main_tree_based.py
@@ -560,7 +670,7 @@ Table-Critic/
 │   │   └── tools/
 │   │       ├── instruction.py
 │   │       ├── few_shot_critic.json
-│   │       ├── update_tree.py
+│   │       ├── update_tree.py         # 🔄 待完整扫描
 │   │       └── get_info.py
 │   └── TableFV/
 │       ├── main.py
@@ -600,12 +710,14 @@ Table-Critic/
 | 主动遗忘 | Active Forgetting | 根据置信度淘汰低质量案例的机制 |
 | 巩固 | Consolidation | 将相似模板蒸馏为通用知识的过程 |
 | 思维链 | Chain-of-Thought | 显式的推理步骤序列 |
+| 约束状态 | Constraint State | 四类约束（行、列、操作、聚合）的统一管理 |
+| 分歧历史 | Dispute History | 记录每轮争议的完整信息 |
 
 ---
 
 **文档生成信息**：
 
-- 生成时间：2026-04-16 00:17:51
-- 扫描阶段：A（全仓清点）+ B（模块扫描）
-- 覆盖率：33%（95/287 文件）
-- 下一步：阶段 C（深度补捞）- 优先扫描 operations 和 constraint 相关文件
+- 生成时间：2026-04-23 00:00:00
+- 扫描阶段：A（全仓清点）+ B（模块扫描）+ C（部分深度补捞）
+- 覆盖率：37%（105/287 文件）
+- 下一步：完成阶段 C 剩余文件扫描（operations, constraint_induction, constraint_aware_chain）
