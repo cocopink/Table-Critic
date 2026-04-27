@@ -3,7 +3,8 @@
 from typing import List, Tuple, Dict
 
 # Separator priority order (most common first)
-SEPARATOR_PRIORITY = ['/', '\n', ' - ', '-', '|', ',']
+# Note: \\n is for JSON-escaped newlines (two characters: backslash + n)
+SEPARATOR_PRIORITY = ['/', '\\n', '\n', ' - ', '-', '|', ',']
 
 def has_compound_headers(table: List[List]) -> bool:
     """Check if table has compound column headers.

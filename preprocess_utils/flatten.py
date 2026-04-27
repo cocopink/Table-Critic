@@ -133,7 +133,7 @@ def flatten_dataset(dataset: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Flatten all tables in a dataset.
 
     Args:
-        dataset: List of sample dicts, each with a 'table' key
+        dataset: List of sample dicts, each with a 'table_text' key (TableQA) or 'table' key (TableFV)
 
     Returns:
         Updated dataset with flattened tables and metadata
@@ -141,13 +141,15 @@ def flatten_dataset(dataset: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     flattened_count = 0
 
     for sample in dataset:
-        if 'table' not in sample:
+        # Support both 'table_text' (TableQA) and 'table' (TableFV) keys
+        table_key = 'table_text' if 'table_text' in sample else 'table'
+        if table_key not in sample:
             continue
 
-        table = sample['table']
+        table = sample[table_key]
         flattened_table, metadata = flatten_table(table)
 
-        sample['table'] = flattened_table
+        sample[table_key] = flattened_table
         sample['flatten_metadata'] = metadata
 
         if metadata['flattened']:
