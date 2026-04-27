@@ -8,7 +8,7 @@ Usage:
     python preprocess.py --dataset_path data.jsonl --output_path output.jsonl --task_type TableQA
 """
 
-import argparse
+import fire
 import json
 import os
 import sys
@@ -114,112 +114,67 @@ def generate_stats(original_data: List[Dict], flattened_data: List[Dict],
     return stats
 
 
-def main():
-    """Main entry point for preprocessing CLI."""
-    parser = argparse.ArgumentParser(
-        description='Preprocess Table-Critic datasets by flattening compound table headers',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Basic usage
-  python preprocess.py \\
-      --dataset_path thought/TableQA/data/wikitq/test_lower.jsonl \\
-      --output_path /tmp/test_flatten.jsonl \\
-      --task_type TableQA
+def main(
+    dataset_path: str = "thought/TableQA/data/wikitq/test_lower.jsonl",
+    output_path: str = "thought/TableQA/data/wikitq/test_flatten.jsonl",
+    task_type: str = "TableQA",
+    force_refresh: bool = False,
+    stats_path: str = None,
+) -> None:
+    """Main preprocessing function.
 
-  # Force refresh (skip cache)
-  python preprocess.py \\
-      --dataset_path data.jsonl \\
-      --output_path output.jsonl \\
-      --task_type TableQA \\
-      --force_refresh
-
-  # Generate statistics
-  python preprocess.py \\
-      --dataset_path data.jsonl \\
-      --output_path output.jsonl \\
-      --task_type TableQA \\
-      --stats_path stats.json
-        """
-    )
-
-    parser.add_argument(
-        '--dataset_path',
-        type=str,
-        required=True,
-        help='Path to input JSONL dataset file'
-    )
-
-    parser.add_argument(
-        '--output_path',
-        type=str,
-        required=True,
-        help='Path to output flattened JSONL file'
-    )
-
-    parser.add_argument(
-        '--task_type',
-        type=str,
-        required=True,
-        choices=['TableQA', 'TableFV'],
-        help='Type of task (TableQA or TableFV)'
-    )
-
-    parser.add_argument(
-        '--force_refresh',
-        action='store_true',
-        help='Force reprocessing even if cached results exist'
-    )
-
-    parser.add_argument(
-        '--stats_path',
-        type=str,
-        default=None,
-        help='Optional path to save processing statistics as JSON'
-    )
-
-    args = parser.parse_args()
+    Args:
+        dataset_path: Path to input JSONL dataset file
+        output_path: Path to output flattened JSONL file
+        task_type: Type of task (TableQA or TableFV)
+        force_refresh: Force reprocessing even if cached results exist
+        stats_path: Optional path to save processing statistics as JSON
+    """
+    # Validate task_type
+    if task_type not in ['TableQA', 'TableFV']:
+        print(f"Error: task_type must be 'TableQA' or 'TableFV', got '{task_type}'", file=sys.stderr)
+        sys.exit(1)
 
     # Validate input file exists
-    if not os.path.exists(args.dataset_path):
-        print(f"Error: Dataset file not found: {args.dataset_path}", file=sys.stderr)
+    if not os.path.exists(dataset_path):
+        print(f"Error: Dataset file not found: {dataset_path}", file=sys.stderr)
         sys.exit(1)
 
     print(f"Table-Critic Preprocessing Pipeline")
     print(f"=" * 50)
-    print(f"Task Type: {args.task_type}")
-    print(f"Input: {args.dataset_path}")
-    print(f"Output: {args.output_path}")
-    print(f"Force Refresh: {args.force_refresh}")
+    print(f"Task Type: {task_type}")
+    print(f"Input: {dataset_path}")
+    print(f"Output: {output_path}")
+    print(f"Force Refresh: {force_refresh}")
     print()
 
     # Load dataset
     print("Loading dataset...")
     try:
-        dataset = load_jsonl(args.dataset_path)
+        dataset = load_jsonl(dataset_path)
         print(f"Loaded {len(dataset)} samples")
     except Exception as e:
         print(f"Error loading dataset: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Check cache
-    cache_path = args.output_path + '.cache'
-    if not args.force_refresh:
+    cache_path = output_path + '.cache'
+    if not force_refresh:
         print("Checking cache...")
         if check_cache(cache_path):
             print("Cache hit! Loading cached results...")
             cached_data = load_cache(cache_path)
-            save_jsonl(cached_data, args.output_path)
+            save_jsonl(cached_data, output_path)
 
-            stats = generate_stats(dataset, cached_data, args.task_type)
+            stats = generate_stats(dataset, cached_data, task_type)
             print(f"Preprocessing complete (from cache)")
             print(f"  Total samples: {stats['total_samples']}")
             print(f"  Tables flattened: {stats['tables_flattened']}")
             print(f"  Tables skipped: {stats['tables_skipped']}")
 
-            if args.stats_path:
-                save_jsonl([stats], args.stats_path)
-                print(f"Statistics saved to: {args.stats_path}")
+            if stats_path:
+                save_jsonl([stats], stats_path)
+                print(f"Statistics saved to: {stats_path}")
 
             sys.exit(0)
 
@@ -236,8 +191,8 @@ Examples:
     # Save results
     print("Saving results...")
     try:
-        save_jsonl(flattened_dataset, args.output_path)
-        print(f"Flattened data saved to: {args.output_path}")
+        save_jsonl(flattened_dataset, output_path)
+        print(f"Flattened data saved to: {output_path}")
     except Exception as e:
         print(f"Error saving results: {e}", file=sys.stderr)
         sys.exit(1)
@@ -251,7 +206,7 @@ Examples:
         print(f"Warning: Failed to save cache: {e}")
 
     # Generate and save statistics
-    stats = generate_stats(dataset, flattened_dataset, args.task_type)
+    stats = generate_stats(dataset, flattened_dataset, task_type)
     print()
     print(f"Preprocessing Statistics:")
     print(f"  Total samples: {stats['total_samples']}")
@@ -264,13 +219,13 @@ Examples:
         print(f"  Avg new columns: {stats['avg_new_columns']}")
         print(f"  Avg columns added: {stats['avg_columns_added']}")
 
-    if args.stats_path:
-        save_jsonl([stats], args.stats_path)
-        print(f"Statistics saved to: {args.stats_path}")
+    if stats_path:
+        save_jsonl([stats], stats_path)
+        print(f"Statistics saved to: {stats_path}")
 
     print()
     print("Preprocessing complete!")
 
 
 if __name__ == '__main__':
-    main()
+    fire.Fire(main)
