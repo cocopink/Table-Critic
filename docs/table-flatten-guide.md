@@ -270,18 +270,18 @@ python cal_acc.py \
 ### 3. 分析坏例改善
 
 ```bash
-# 提取坏例
-python tools/analyze_bad_cases.py \
-  --baseline_results results/qa_baseline \
-  --flatten_results results/qa_with_flatten \
-  --output_dir analysis/flatten_improvement
+# 提取坏例（注：以下脚本需要用户根据实际需求自行实现）
+# python tools/analyze_bad_cases.py \
+#   --baseline_results results/qa_baseline \
+#   --flatten_results results/qa_with_flatten \
+#   --output_dir analysis/flatten_improvement
 ```
 
 ---
 
 ## 故障排除
 
-### 问题 1：Flatting 后表格为空
+### 问题 1：Flattening 后表格为空
 
 **症状**：
 ```python
@@ -444,7 +444,7 @@ done
 
 | 操作 | 耗时 | 说明 |
 |------|------|------|
-| 检测表格类型 | < 1ms | 基于 simple heuristics |
+| 检测表格类型 | < 1ms | 基于简单启发式规则 |
 | 扁平化多级表头 | 1-5ms | 取决于表格大小 |
 | 展开嵌套表格 | 5-20ms | 需要解析嵌套结构 |
 | 批量处理 1000 样本 | < 5s | 包含所有类型 |
