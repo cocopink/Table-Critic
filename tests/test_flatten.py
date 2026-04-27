@@ -124,3 +124,84 @@ def test_split_cell_value_priority():
     # Test 3: Fallback to copy
     result = split_cell_value("unknown", "/", 2)
     assert result == ["unknown", "unknown"]
+
+
+# ===== Cache Tests (Task 4) =====
+
+import os
+import tempfile
+from preprocess_utils.cache import check_cache, load_cache, save_cache
+
+
+def test_check_cache_when_file_exists():
+    """Should return True when cache file exists"""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+        cache_path = f.name
+        f.write('{"test": "data"}')
+
+    try:
+        assert check_cache(cache_path) == True
+    finally:
+        os.unlink(cache_path)
+
+
+def test_check_cache_when_file_missing():
+    """Should return False when cache file doesn't exist"""
+    assert check_cache("/nonexistent/path.jsonl") == False
+
+
+def test_save_and_load_cache():
+    """Should save and load samples correctly"""
+    import tempfile
+    import os
+
+    samples = [
+        {"id": "1", "table": [["a", "b"], ["c", "d"]]},
+        {"id": "2", "table": [["e", "f"], ["g", "h"]]}
+    ]
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+        cache_path = f.name
+
+    try:
+        # Save
+        save_cache(samples, cache_path)
+
+        # Check cache exists
+        assert check_cache(cache_path) == True
+
+        # Load
+        loaded_samples = load_cache(cache_path)
+
+        assert len(loaded_samples) == 2
+        assert loaded_samples[0]["id"] == "1"
+        assert loaded_samples[1]["id"] == "2"
+    finally:
+        if os.path.exists(cache_path):
+            os.unlink(cache_path)
+
+
+def test_load_cache_raises_file_not_found():
+    """Should raise FileNotFoundError when cache doesn't exist"""
+    import pytest
+
+    with pytest.raises(FileNotFoundError):
+        load_cache("/nonexistent/path.jsonl")
+
+
+def test_save_cache_creates_directory():
+    """Should create directory if it doesn't exist"""
+    import tempfile
+    import shutil
+
+    temp_dir = tempfile.mkdtemp()
+    cache_path = os.path.join(temp_dir, "subdir", "cache.jsonl")
+
+    try:
+        samples = [{"id": "1", "data": "test"}]
+        save_cache(samples, cache_path)
+
+        assert os.path.exists(cache_path)
+        assert check_cache(cache_path) == True
+    finally:
+        shutil.rmtree(temp_dir)
