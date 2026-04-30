@@ -13,3 +13,4 @@ nohup.out.zcf/
 milvus/*.lock
 thought/TableFV/data/tabfact/
 .zcf/plan/history/
+evaluation/finance_bench/eval_output/
