@@ -1,11 +1,11 @@
 # base_url='Qwen/Qwen2.5-72B-Instruct'
-# base_url='https://yunwu.ai/v1'
-# openai_api_key="$YUNWU_API_KEY"
-# model_name='gpt-5.4'
+base_url='https://yunwu.ai/v1'
+openai_api_key="$YUNWU_API_KEY"
+model_name='gpt-5.4'
 
-model_name='glm-5'
-base_url='https://dashscope.aliyuncs.com/compatible-mode/v1'
-openai_api_key="$DASHSCOPE_API_KEY"
+# model_name='glm-5'
+# base_url='https://dashscope.aliyuncs.com/compatible-mode/v1'
+# openai_api_key="$DASHSCOPE_API_KEY"
 
 # base_url='https://api.holdai.top/v1'
 # openai_api_key="${HAOMIAO_API_KEY}"
