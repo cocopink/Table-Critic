@@ -9,3 +9,7 @@ siliconflow.txt
 api.txt
 .out
 nohup.out.zcf/
+.zcf/
+milvus/*.lock
+thought/TableFV/data/tabfact/
+.zcf/plan/history/
