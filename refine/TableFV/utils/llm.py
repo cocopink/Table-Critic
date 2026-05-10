@@ -254,14 +254,6 @@ class LLM:
         print(f"Token usage saved to {filepath}")
 
     @staticmethod
-        """返回当前进程的token使用统计"""
-        return {
-            'input_tokens': self.input_tokens,
-            'output_tokens': self.output_tokens,
-            'total_tokens': self.input_tokens + self.output_tokens
-        }
-
-    @staticmethod
     def collect_token_usage(log_dir, output_path=None):
         """汇总所有进程的token日志文件，返回总统计并可选保存到文件"""
         import json, os, glob, time

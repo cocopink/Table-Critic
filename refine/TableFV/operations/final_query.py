@@ -262,6 +262,8 @@ def simple_query_with_critic(sample, table_info, llm, debug=False, use_demo=True
         for row in group_rows:
             prompt += " | ".join(row) + "\n"
         prompt += "*/\n"
+    if sample.get("table_analysis", {}).get("answer_format_hint"):
+        prompt += sample["table_analysis"]["answer_format_hint"] + "\n\n"
     prompt += "Statement: " + statement + "\n"
     prompt += "Answer: " + sample["chain"][-1]["parameter_and_conf"][0][0] + "\n"
     prompt += f"Critique: \n{critique}\n\n"
@@ -356,12 +358,13 @@ def simple_query_cot_original(sample, table_info, llm, debug=False, use_demo=Tru
             prompt += " | ".join(row) + "\n"
         prompt += "*/\n"
 
-    
+    if sample.get("table_analysis", {}).get("answer_format_hint"):
+        prompt += sample["table_analysis"]["answer_format_hint"] + "\n\n"
 
     prompt += "Explanation: "
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
 
-    
+
     for res, score in responses:
         responses_list = [(res.split("Answer:")[1].strip(), np.exp(score)) if "Answer:" in res else (res.strip(), np.exp(score))]
 
@@ -371,7 +374,7 @@ def simple_query_cot_original(sample, table_info, llm, debug=False, use_demo=Tru
 
     thought = responses[0][0].split("Answer:")[0].strip() if "Answer:" in responses[0][0] else responses[0][0].strip() + "\n"
 
-    
+
     operation = {
         "operation_name": "simple_query",
         "parameter_and_conf": responses_list,

@@ -57,11 +57,14 @@ def only_keep_num_and_first_dot(s):
     return ns
 
 
-def sort_column_build_prompt(table_text, statement, table_caption=None, num_rows=100):
+def sort_column_build_prompt(table_text, statement, table_caption=None, num_rows=100, table_analysis=None):
     table_str = table2string(
         table_text, caption=table_caption, num_rows=num_rows
     ).strip()
     prompt = "/*\n" + table_str + "\n*/\n"
+    if table_analysis and table_analysis.get("format_normalizations"):
+        for _col, info in table_analysis["format_normalizations"].items():
+            prompt += info["hint"] + "\n"
     prompt += "Statement: " + statement + "\n"
     prompt += "The existing columns are: "
     prompt += ", ".join(table_text[0]) + ".\n"
@@ -82,7 +85,7 @@ def sort_column_func(
     prompt = "" + sort_column_demo.rstrip() + "\n\n"
     if critic:
         prompt += critic
-    prompt += sort_column_build_prompt(table_text, statement, num_rows=3)
+    prompt += sort_column_build_prompt(table_text, statement, num_rows=3, table_analysis=sample.get("table_analysis"))
     
     # 如果存在 Clarifier 信息，添加到 prompt 中以提供额外的上下文信息
     if clarifier_info:

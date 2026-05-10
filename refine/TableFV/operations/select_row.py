@@ -6,9 +6,12 @@ from utils.helper import table2string
 from third_party.select_column_row_prompts.select_column_row_prompts import select_row_demo
 
 
-def select_row_build_prompt(table_text, statement, table_caption=None, num_rows=100):
+def select_row_build_prompt(table_text, statement, table_caption=None, num_rows=100, table_analysis=None):
     table_str = table2string(table_text, caption=table_caption).strip()
     prompt = "/*\n" + table_str + "\n*/\n"
+    if table_analysis and table_analysis.get("column_normalizations"):
+        for norm in table_analysis["column_normalizations"]:
+            prompt += norm["hint"] + "\n"
     prompt += "Statement: " + statement + "\n"
     prompt += "Explanation: "
     return prompt
@@ -23,7 +26,7 @@ def select_row_func(sample, table_info, llm, llm_options=None, debug=False, crit
     prompt = "" + select_row_demo.rstrip() + "\n\n"
     if critic:
         prompt += critic
-    prompt += select_row_build_prompt(table_text, statement, table_caption)
+    prompt += select_row_build_prompt(table_text, statement, table_caption, table_analysis=sample.get("table_analysis"))
 
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
 
