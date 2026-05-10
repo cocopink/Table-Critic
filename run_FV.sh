@@ -1,15 +1,7 @@
-# base_url='Qwen/Qwen2.5-72B-Instruct'
-base_url='https://yunwu.ai/v1'
-openai_api_key="$YUNWU_API_KEY"
+# API Configuration
+base_url='https://113.44.247.131:47851'
+openai_api_key="$ANTHROPIC_AUTH_TOKEN"
 model_name='gpt-5.4'
-
-# model_name='glm-5'
-# base_url='https://dashscope.aliyuncs.com/compatible-mode/v1'
-# openai_api_key="$DASHSCOPE_API_KEY"
-
-# base_url='https://api.holdai.top/v1'
-# openai_api_key="${HAOMIAO_API_KEY}"
-# model_name='gpt-4.1-mini'
 
 first_n=-1
 n_proc=8
@@ -23,6 +15,9 @@ USE_FLATTEN="true"  # Set to "false" for baseline version
 DATA_DIR="thought/TableFV/data/tabfact"
 ORIGINAL_DATA="${DATA_DIR}/test.jsonl"
 FLATTENED_DATA="${DATA_DIR}/test_flatten.jsonl"
+
+# ============== TableAnalyzer Configuration ==============
+USE_TABLE_ANALYZER="true"  # Set to "false" to skip analysis stage
 
 # ============== Results Path Configuration ==============
 if [ "$USE_FLATTEN" = "true" ]; then
@@ -40,6 +35,7 @@ else
 fi
 
 PREPROCESS_RESULTS="${RESULTS_BASE}/preprocess/tabfact"
+ANALYSIS_DATA="${DATA_DIR}/test_analyzed.jsonl"
 THOUGHT_RESULTS="${RESULTS_BASE}/thought/tabfact/${model_name}"
 REFINE_RESULTS="${RESULTS_BASE}/refine/tabfact/${model_name}"
 
@@ -67,6 +63,31 @@ if [ "$USE_FLATTEN" = "true" ]; then
     else
         echo "✅ Using existing flattened data: $FLATTENED_DATA"
     fi
+    echo ""
+fi
+
+# ============== Stage 0.5: Table Analysis ==============
+if [ "$USE_TABLE_ANALYZER" = "true" ]; then
+    ANALYSIS_INPUT="$DATASET_TO_USE"
+
+    if [ ! -f "$ANALYSIS_DATA" ] || [ "$ANALYSIS_DATA" -ot "$ANALYSIS_INPUT" ]; then
+        echo "Stage 0.5: Table Analysis"
+        echo "------------------------------------------"
+        python preprocess.py \
+            --dataset_path "$ANALYSIS_INPUT" \
+            --output_path "$ANALYSIS_DATA" \
+            --task_type TableFV \
+            --analysis_only
+
+        if [ $? -ne 0 ]; then
+            echo "❌ Error in analysis stage"
+            exit 1
+        fi
+        echo "✅ Analysis complete!"
+    else
+        echo "✅ Using existing analysis: $ANALYSIS_DATA"
+    fi
+    DATASET_TO_USE="$ANALYSIS_DATA"
     echo ""
 fi
 
