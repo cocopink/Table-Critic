@@ -237,6 +237,9 @@ def simple_query(sample, table_info, llm, debug=False, use_demo=True, llm_option
             prompt += " | ".join(row) + "\n"
         prompt += "*/\n"
 
+    if sample.get("table_analysis", {}).get("answer_format_hint"):
+        prompt += sample["table_analysis"]["answer_format_hint"] + "\n\n"
+
     prompt += "Question: " + statement + "\n"
 
     prompt += "Explanation: "
@@ -325,6 +328,8 @@ def simple_query_with_critic(sample, table_info, llm, debug=False, use_demo=True
         for row in group_rows:
             prompt += " | ".join(row) + "\n"
         prompt += "*/\n"
+    if sample.get("table_analysis", {}).get("answer_format_hint"):
+        prompt += sample["table_analysis"]["answer_format_hint"] + "\n\n"
     prompt += "Question: " + sample["statement"] + "\n"
     prompt += "Answer: " + sample["chain"][-1]["parameter_and_conf"][0][0] + "\n"
     prompt += f"Critique: \n{critique}\n\n"
@@ -375,6 +380,9 @@ def few_shot_query(sample, table_info, llm, debug=False, use_demo=False, llm_opt
     prompt += "/*\n"
     prompt += table2string(table_text) + "\n"
     prompt += "*/\n"
+
+    if sample.get("table_analysis", {}).get("answer_format_hint"):
+        prompt += sample["table_analysis"]["answer_format_hint"] + "\n\n"
 
     prompt += "Question: " + statement + "\n"
 
@@ -457,7 +465,8 @@ def simple_query_cot_original(sample, table_info, llm, debug=False, use_demo=Tru
             prompt += " | ".join(row) + "\n"
         prompt += "*/\n"
 
-    
+    if sample.get("table_analysis", {}).get("answer_format_hint"):
+        prompt += sample["table_analysis"]["answer_format_hint"] + "\n\n"
 
     prompt += "Explanation: "
     responses = llm.generate_plus_with_score(prompt, options=llm_options)

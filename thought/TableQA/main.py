@@ -82,11 +82,6 @@ def main(
             )
         print(f"Saved clarifier results to {clarifier_dir}")
 
-    # Stage 0.5: inject table_analysis into table_info
-    for _sample in dataset:
-        if "table_analysis" in _sample:
-            _sample.setdefault("table_info", {})["table_analysis"] = _sample["table_analysis"]
-
     proc_samples, _ = dynamic_chain_exec_with_cache_mp(
         dataset,
         llm=gpt_llm,

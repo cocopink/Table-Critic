@@ -15,6 +15,7 @@ def table2string(
     table_text,
     num_rows=100,
     caption=None,
+    extra_context=None,
 ):
     df = table2df(table_text, num_rows)
     linear_table = ""
@@ -23,6 +24,8 @@ def table2string(
 
     header = "col : " + " | ".join(df.columns) + "\n"
     linear_table += header
+    if extra_context:
+        linear_table += "\n" + extra_context + "\n"
     rows = df.values.tolist()
     for row_idx, row in enumerate(rows):
         row = [str(x) for x in row]

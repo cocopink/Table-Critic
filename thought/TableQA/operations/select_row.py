@@ -21,12 +21,9 @@ from utils.helper import table2string
 from third_party.select_column_row_prompts.select_column_row_prompts import select_row_demo
 
 
-def select_row_build_prompt(table_text, statement, table_caption=None, num_rows=100, table_analysis=None):
+def select_row_build_prompt(table_text, statement, table_caption=None, num_rows=100):
     table_str = table2string(table_text, caption=table_caption).strip()
     prompt = "/*\n" + table_str + "\n*/\n"
-    if table_analysis and table_analysis.get("column_normalizations"):
-        for norm in table_analysis["column_normalizations"]:
-            prompt += norm["hint"] + "\n"
     question = statement
     prompt += "Question: " + question + "\n"
     prompt += "Explanation: "
@@ -39,7 +36,7 @@ def select_row_func(sample, table_info, llm, llm_options=None, debug=False):
     statement = sample["statement"]
 
     prompt = "" + select_row_demo.rstrip() + "\n\n"
-    prompt += select_row_build_prompt(table_text, statement, table_analysis=sample.get("table_analysis"))
+    prompt += select_row_build_prompt(table_text, statement)
 
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
 
