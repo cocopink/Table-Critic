@@ -72,11 +72,14 @@ def only_keep_num_and_first_dot(s):
     return ns
 
 
-def sort_column_build_prompt(table_text, statement, table_caption=None, num_rows=100):
+def sort_column_build_prompt(table_text, statement, table_caption=None, num_rows=100, table_analysis=None):
     table_str = table2string(
         table_text, caption=table_caption, num_rows=num_rows
     ).strip()
     prompt = "/*\n" + table_str + "\n*/\n"
+    if table_analysis and table_analysis.get("format_normalizations"):
+        for _col, info in table_analysis["format_normalizations"].items():
+            prompt += info["hint"] + "\n"
     prompt += "Question: " + statement + "\n"
     prompt += "The existing columns are: "
     prompt += ", ".join(table_text[0]) + ".\n"
@@ -92,7 +95,7 @@ def sort_column_func(
 
     statement = sample["statement"]
     prompt = "" + sort_column_demo.rstrip() + "\n\n"
-    prompt += sort_column_build_prompt(table_text, statement, num_rows=3)
+    prompt += sort_column_build_prompt(table_text, statement, num_rows=3, table_analysis=sample.get("table_analysis"))
     responses = llm.generate_plus_with_score(
         prompt,
         options=llm_options,

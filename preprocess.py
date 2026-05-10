@@ -120,6 +120,7 @@ def main(
     task_type: str = "TableQA",
     force_refresh: bool = False,
     stats_path: str = None,
+    analysis_only: bool = False,
 ) -> None:
     """Main preprocessing function.
 
@@ -139,6 +140,28 @@ def main(
     if not os.path.exists(dataset_path):
         print(f"Error: Dataset file not found: {dataset_path}", file=sys.stderr)
         sys.exit(1)
+
+    # --- analysis_only mode (Stage 0.5) ---
+    if analysis_only:
+        print(f"Table-Critic Analysis Pipeline (--analysis_only)")
+        print(f"=" * 50)
+        print(f"Task Type: {task_type}")
+        print(f"Input:  {dataset_path}")
+        print(f"Output: {output_path}")
+        print()
+
+        from agents.table_analyzer import TableAnalyzer
+
+        analyzer = TableAnalyzer()
+        dataset = load_jsonl(dataset_path)
+        analyzed_count = 0
+        for item in dataset:
+            item["table_analysis"] = analyzer.analyze(item)
+            analyzed_count += 1
+
+        save_jsonl(dataset, output_path)
+        print(f"Analyzed {analyzed_count} samples → {output_path}")
+        return
 
     print(f"Table-Critic Preprocessing Pipeline")
     print(f"=" * 50)

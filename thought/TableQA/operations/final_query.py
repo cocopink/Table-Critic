@@ -187,6 +187,9 @@ def simple_query(sample, table_info, llm, debug=False, use_demo=False, llm_optio
             prompt += " | ".join(row) + "\n"
         prompt += "*/\n"
 
+    if table_info.get("table_analysis", {}).get("answer_format_hint"):
+        prompt += table_info["table_analysis"]["answer_format_hint"] + "\n\n"
+
     prompt += "Question: " + statement + "\n"
 
     prompt += "Explanation: "

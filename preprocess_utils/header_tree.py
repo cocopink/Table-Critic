@@ -128,8 +128,7 @@ class HeaderTree:
             compound_count=compound_count,
             max_depth=max_depth,
         )
-
-        # Detect compound cells in compound columns
+        tree._table_text = table_text
         tree._detect_compound_cells(table_text)
 
         return tree
