@@ -18,9 +18,9 @@ import fire
 import os
 import sys
 import pickle
-sys.path.append('thought/TableQA')
-sys.path.append('.')
-sys.path.append('critic/TableQA')
+sys.path.insert(0, 'thought/TableQA')
+sys.path.insert(0, '.')
+sys.path.insert(0, 'critic/TableQA')
 from utils.load_data import load_wikitq_dataset
 from utils.llm import LLM
 from utils.helper import *

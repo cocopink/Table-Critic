@@ -4,9 +4,9 @@ import fire
 import os
 import sys
 from tqdm import tqdm
-sys.path.append('critic/TableFV')
-sys.path.append('refine/TableFV')
-sys.path.append('.')
+sys.path.insert(0, 'critic/TableFV')
+sys.path.insert(0, 'refine/TableFV')
+sys.path.insert(0, '.')
 from tools import CRITIC_TREE_JSON
 from utils.read_pkl import read_pkl
 from utils.extract_step import return_incorrect_max_step

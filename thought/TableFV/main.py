@@ -17,9 +17,9 @@ import subprocess
 import fire
 import os
 import sys
-sys.path.append('thought/TableFV')
-sys.path.append('critic/TableFV')
-sys.path.append('.')
+sys.path.insert(0, 'thought/TableFV')
+sys.path.insert(0, 'critic/TableFV')
+sys.path.insert(0, '.')
 from utils.load_data import load_tabfact_dataset
 from utils.llm import LLM
 from utils.helper import *
