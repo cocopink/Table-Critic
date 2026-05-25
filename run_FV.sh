@@ -1,9 +1,9 @@
 # API Configuration
-base_url='https://113.44.247.131:47851'
+base_url='https://113.44.247.131:47851/v1'
 openai_api_key="$ANTHROPIC_AUTH_TOKEN"
 model_name='gpt-5.4'
 
-first_n=-1
+first_n=1
 n_proc=8
 chunk_size=4
 
@@ -21,13 +21,13 @@ USE_TABLE_ANALYZER="true"  # Set to "false" to skip analysis stage
 
 # ============== Results Path Configuration ==============
 if [ "$USE_FLATTEN" = "true" ]; then
-    RESULTS_BASE="results/flattened"
+    RESULTS_BASE="test/results/flattened"
     DATASET_TO_USE="$FLATTENED_DATA"
     echo "=========================================="
     echo "🚀 Running with FLATTENED tables"
     echo "=========================================="
 else
-    RESULTS_BASE="results"
+    RESULTS_BASE="test/results"
     DATASET_TO_USE="$ORIGINAL_DATA"
     echo "=========================================="
     echo "📊 Running with ORIGINAL tables (baseline)"
@@ -136,8 +136,8 @@ if [ "$USE_FLATTEN" = "true" ]; then
     echo "Results: $RESULTS_BASE"
     echo ""
     echo "📊 Compare with baseline:"
-    echo "  Baseline:  results/thought/tabfact/${model_name}/acc.txt"
-    echo "  Flattened: results/flattened/thought/tabfact/${model_name}/acc.txt"
+    echo "  Baseline:  test/results/thought/tabfact/${model_name}/acc.txt"
+    echo "  Flattened: test/results/flattened/thought/tabfact/${model_name}/acc.txt"
 else
     echo "Mode: 📊 Baseline (Original)"
     echo "Results: $RESULTS_BASE"
