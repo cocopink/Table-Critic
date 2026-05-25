@@ -857,7 +857,7 @@ class ActionExecutor:
     负责执行 Controller 决策的动作，并更新状态
     """
     
-    def __init__(self, llm, llm_options):
+    def __init__(self, llm, llm_options, use_verifier=False):
         """
         初始化执行器
         
@@ -867,6 +867,7 @@ class ActionExecutor:
         """
         self.llm = llm
         self.llm_options = llm_options
+        self.use_verifier = use_verifier
         
         # 初始化 RetrieverAgent（阶段2：独立检索器）
         from agents import RetrieverAgent
@@ -926,7 +927,8 @@ class ActionExecutor:
                     llm=self.llm,
                     llm_options=self.llm_options,
                     blueprint_only=blueprint_only,
-                    pre_retrieved_few_shot=pre_retrieved_few_shot  # 传递预检索的数据
+                    pre_retrieved_few_shot=pre_retrieved_few_shot,
+                    use_verifier=self.use_verifier,
                 )
             else:
                 # 如果没有预检索数据，才调用 RetrieverAgent（向后兼容）
@@ -936,7 +938,7 @@ class ActionExecutor:
                     retrieval_result = self.retriever.retrieve_by_route(error_route)
                     state.retrieved_blueprints = retrieval_result.get('blueprint')
                     pre_retrieved_few_shot = retrieval_result.get('few_shot_examples', [])
-                    
+
                     if DEBUG:
                         print(f"[DEBUG RETRIEVER] Retrieved blueprint: {state.retrieved_blueprints is not None}")
                         print(f"[DEBUG RETRIEVER] Retrieved few_shot count: {len(pre_retrieved_few_shot)}")
@@ -944,7 +946,7 @@ class ActionExecutor:
                     print(f"[ERROR] RetrieverAgent retrieve_by_route failed: {e}", flush=True)
                     print(f"Full traceback: {traceback.format_exc()}", flush=True)
                     pre_retrieved_few_shot = None
-                
+
                 # 执行 critic
                 critic_sample = critic_exec_one_sample(
                     state.sample,
@@ -952,7 +954,8 @@ class ActionExecutor:
                     llm=self.llm,
                     llm_options=self.llm_options,
                     blueprint_only=blueprint_only,
-                    pre_retrieved_few_shot=pre_retrieved_few_shot  # 传递预检索的数据
+                    pre_retrieved_few_shot=pre_retrieved_few_shot,
+                    use_verifier=self.use_verifier,
                 )
             
             state.diagnosis = {
@@ -1152,7 +1155,9 @@ def controller_main_loop(
     cache_dir: Optional[str] = None,
     sample_idx: Optional[int] = None,
     use_clarifier: bool = True,
-    thought_results_dir: Optional[str] = None
+    thought_results_dir: Optional[str] = None,
+    use_verifier: bool = False,
+    router_variant: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Controller 主循环（兼容现有代码，支持 Clarifier）
@@ -1233,6 +1238,8 @@ def controller_main_loop(
     
     # 如果初始状态已经正确，直接返回
     if state.is_correct:
+        # Record routing info
+        judge_sample["_route"] = "SKIP"
         # 缓存正确的结果
         if cache_dir is not None:
             try:
@@ -1244,10 +1251,64 @@ def controller_main_loop(
                 if DEBUG:
                     print(f"[CACHE] Failed to save cache: {e}")
         return judge_sample
-    
+
+    # AdaRefine Router: decide SKIP/LITE/FULL
+    if router_variant:
+        from refine.TableQA.utils.router import ROUTER_VARIANTS, RouteDecision
+        router_fn = ROUTER_VARIANTS.get(router_variant, ROUTER_VARIANTS["full"])
+        route_result = router_fn(judge_sample)
+
+        if DEBUG:
+            print(f"[ROUTER] Decision: {route_result}")
+            print(f"[ROUTER] Signals: {route_result.signals}")
+
+        if route_result.decision == RouteDecision.SKIP:
+            # Already handled above (Judge-Skip)
+            pass
+
+        elif route_result.decision == RouteDecision.LITE:
+            if DEBUG:
+                print(f"[ROUTER] LITE mode: skipping Critic/Controller, direct re-query")
+            # LITE: only run simple_query (1 LLM call), skip Critic + Controller
+            from refine.TableQA.utils.chain import get_table_info
+            from refine.TableQA.operations.final_query import simple_query_cot_original
+
+            table_info = get_table_info(judge_sample, skip_op=[], first_n_op=None)
+            lite_sample = simple_query_cot_original(
+                judge_sample,
+                table_info,
+                llm,
+                debug=DEBUG,
+                use_demo=True,
+                llm_options=llm_options
+            )
+
+            # Cache and return
+            if cache_dir is not None:
+                try:
+                    with open(cache_path, "wb") as f:
+                        pickle.dump(lite_sample, f)
+                    if DEBUG:
+                        print(f"[CACHE] Saved LITE result to cache: {cache_path}")
+                except Exception as e:
+                    if DEBUG:
+                        print(f"[CACHE] Failed to save cache: {e}")
+
+            # Record routing info
+            lite_sample["_route"] = "LITE"
+            lite_sample["_route_signals"] = route_result.signals
+            return lite_sample
+        else:
+            # FULL: continue with standard Controller pipeline
+            judge_sample["_route"] = "FULL"
+            judge_sample["_route_signals"] = route_result.signals
+    else:
+        judge_sample["_route"] = "FULL"
+        judge_sample["_route_signals"] = {}
+
     # 初始化组件
     # 修复1：先创建 ActionExecutor 以获取 RetrieverAgent 实例
-    executor = ActionExecutor(llm, llm_options)
+    executor = ActionExecutor(llm, llm_options, use_verifier=use_verifier)
     # 将 retriever 传递给 controller，避免重复创建实例
     controller = MinimalController(llm, llm_options, max_iterations, retriever=executor.retriever)
     

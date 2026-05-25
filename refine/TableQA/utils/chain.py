@@ -931,6 +931,7 @@ def judge_critic_refine_with_cache_mp(
     cache_dir="./results/debug",
     n_proc=8,
     chunk_size=4,
+    use_verifier=False,
 ):
     os.makedirs(cache_dir, exist_ok=True)
     result_samples = [None for _ in range(len(all_samples))]
@@ -938,7 +939,7 @@ def judge_critic_refine_with_cache_mp(
     with mp.Manager() as manager:
         lock = manager.Lock()
         args = [
-            (idx, sample, llm, llm_options, strategy, cache_dir, lock)
+            (idx, sample, llm, llm_options, strategy, cache_dir, lock, use_verifier)
             for idx, sample in enumerate(all_samples)
         ]
 
@@ -956,7 +957,7 @@ def judge_critic_refine_with_cache_mp(
 
 
 def _judge_critic_refine_with_cache_mp_core(arg):
-    idx, sample, llm, llm_options, strategy, cache_dir, lock = arg
+    idx, sample, llm, llm_options, strategy, cache_dir, lock, use_verifier = arg
     cache_filename = "case-{}.pkl"
     try:
         sample_id = sample["id"]
@@ -993,9 +994,9 @@ def _judge_critic_refine_with_cache_mp_core(arg):
                     current_stage = f"loop_{loop_count}_critic_execution"
                     # 第一轮使用蓝图模式，只提供错误摘要
                     if loop_count == 0:
-                        critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=True)
+                        critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=True, use_verifier=use_verifier)
                     else:
-                        critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=False)
+                        critic_sample = critic_exec_one_sample(tree_sample, error_route, llm=llm, llm_options=llm_options, blueprint_only=False, use_verifier=use_verifier)
                     
                     current_stage = f"loop_{loop_count}_step_analysis"
                     incorrect_step, max_step = return_incorrect_max_step(critic_sample)

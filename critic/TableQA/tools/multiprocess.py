@@ -68,7 +68,8 @@ def critic_exec_one_sample(
     llm,
     llm_options=None,
     blueprint_only=False,
-    pre_retrieved_few_shot=None  # 新增：接受预检索的 few-shot 数据，避免重复检索
+    pre_retrieved_few_shot=None,
+    use_verifier=False,
 ):
     critic_sample = copy.deepcopy(sample)
     prompt = ""
@@ -120,7 +121,15 @@ def critic_exec_one_sample(
     
     prompt += few_shot
 
-    cot, max_step = get_cot_for_critic(critic_sample)
+    verification_report = None
+    if use_verifier:
+        try:
+            from refine.TableQA.utils.verifier import verify_chain
+            verification_report = verify_chain(critic_sample)
+        except Exception as e:
+            print(f"[WARN] Verifier failed: {e}", flush=True)
+
+    cot, max_step = get_cot_for_critic(critic_sample, verification_report=verification_report)
     prompt += cot
 
     responses = llm.generate_plus_with_score(prompt, options=llm_options)

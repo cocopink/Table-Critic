@@ -10,6 +10,7 @@ critic_instruction = """You are an intelligent critic tasked with determining wh
     - f_group_column(): Groups rows based on the values in a specific column.
     - f_sort_column():  Sorts rows based on the values in a specified column.
 4. Prediction Answer: Final derived answer following the reasoning chain.
+5. Automated Verification Results (if provided): Deterministic checks on each reasoning step (e.g., row index bounds, column existence, sort order). Use these as hints to guide your analysis, but do not treat them as definitive — your own reasoning takes priority.
 
 Instruction:
 1. **Step-wise Analysis**: Conduct an evaluation of each reasoning step's validity. The step that is unnecessary but does not affect the answer is considered correct.

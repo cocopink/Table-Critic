@@ -122,7 +122,7 @@ def replace_leaves_with_end(tree_data):
     
     return data
 
-def get_cot_for_critic(sample):
+def get_cot_for_critic(sample, verification_report=None):
     try:
 
 
@@ -184,7 +184,10 @@ def get_cot_for_critic(sample):
             cotable_result = str(cotable_result)
         elif isinstance(cotable_result, list):
             cotable_result = str(cotable_result)
-        cot += "Prediction Answer: \n" + str(cotable_result).lower() + "\n\n" + "Critique:"
+        cot += "Prediction Answer: \n" + str(cotable_result).lower() + "\n\n"
+        if verification_report is not None and verification_report.steps:
+            cot += verification_report.to_critic_prompt() + "\n"
+        cot += "Critique:"
 
         return cot, step
     except Exception as e:
