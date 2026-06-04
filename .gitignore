@@ -15,3 +15,7 @@ thought/TableFV/data/tabfact/
 .zcf/plan/history/
 evaluation/finance_bench/eval_output/
 .env
+
+# External repos & binary artifacts
+Auto-claude-code-research-in-sleep/
+*.xlsx
