@@ -134,7 +134,7 @@ def get_act_func(name):
 
 
 def get_table_info(sample, skip_op=[], first_n_op=None):
-    table_text = sample["table_text"]
+    table_text = sample.get("atg_reranked_table") or sample["table_text"]
     chain = sample["chain"]
 
     if first_n_op is not None:
@@ -154,7 +154,7 @@ def get_table_info(sample, skip_op=[], first_n_op=None):
 
 
 def get_table_log(sample, skip_op=[], first_n_op=None):
-    table_text = sample["table_text"]
+    table_text = sample.get("atg_reranked_table") or sample["table_text"]
     chain = sample["chain"]
 
     if first_n_op is not None:
@@ -493,7 +493,7 @@ def dynamic_chain_exec_one_sample(
                     temperature=0.5,
                     per_example_max_decode_steps=150,
                     per_example_top_p=1.0,
-                    n_sample=4,
+                    n_sample=8,
                 ),
             ),
             "select_column": (
@@ -504,7 +504,7 @@ def dynamic_chain_exec_one_sample(
                     temperature=0.5,
                     per_example_max_decode_steps=150,
                     per_example_top_p=1.0,
-                    n_sample=4,
+                    n_sample=8,
                 ),
             ),
             "group_column": (
@@ -560,11 +560,11 @@ def dynamic_chain_exec_one_sample(
         current_sample = solver_func(
             current_sample, table_info, llm=llm, llm_options=op_llm_options, **kargs
         )
-        
+
         # 确保 clarifier 字段被保留
         if original_clarifier is not None and 'clarifier' not in current_sample:
             current_sample['clarifier'] = original_clarifier
-    
+
     return current_sample, dynamic_chain_log
 
 
@@ -586,7 +586,7 @@ def dynamic_chain_exec_with_cache_for_loop(
         sample_id = sample["id"]
         cache_path = os.path.join(cache_dir, cache_filename.format(sample_id))
         if os.path.exists(cache_path):
-            _, proc_sample, log = pickle.load(open(cache_path, "rb")) 
+            _, proc_sample, log = pickle.load(open(cache_path, "rb"))
         else:
             proc_sample, log = dynamic_chain_exec_one_sample(
                 sample, llm=llm, llm_options=llm_options, strategy=strategy

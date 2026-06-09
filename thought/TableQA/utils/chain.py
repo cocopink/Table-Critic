@@ -125,7 +125,7 @@ def get_act_func(name):
 
 
 def get_table_info(sample, skip_op=[], first_n_op=None):
-    table_text = sample["table_text"]
+    table_text = sample.get("atg_reranked_table") or sample["table_text"]
     chain = sample["chain"]
 
     if first_n_op is not None:
@@ -145,7 +145,7 @@ def get_table_info(sample, skip_op=[], first_n_op=None):
 
 
 def get_table_log(sample, skip_op=[], first_n_op=None):
-    table_text = sample["table_text"]
+    table_text = sample.get("atg_reranked_table") or sample["table_text"]
     chain = sample["chain"]
 
     if first_n_op is not None:
@@ -484,7 +484,7 @@ def dynamic_chain_exec_one_sample(
                     temperature=0.5,
                     per_example_max_decode_steps=150,
                     per_example_top_p=1.0,
-                    n_sample=4,
+                    n_sample=8,
                 ),
             ),
             "select_column": (
@@ -495,7 +495,7 @@ def dynamic_chain_exec_one_sample(
                     temperature=0.5,
                     per_example_max_decode_steps=150,
                     per_example_top_p=1.0,
-                    n_sample=4,
+                    n_sample=8,
                 ),
             ),
             "group_column": (

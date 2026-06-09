@@ -33,7 +33,7 @@ OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
 OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-64000}
 
 # 默认模型（可通过参数修改）
-DEFAULT_MODEL="qwen3:32b"
+DEFAULT_MODEL="qwen3.6:4b"
 
 # 数据处理参数
 FIRST_N=10
@@ -42,12 +42,6 @@ CHUNK_SIZE=1
 
 # 任务类型（FV 或 QA）
 TASK_TYPE="QA"
-
-# Controller 参数（默认启用）
-USE_CONTROLLER=True
-
-# 添加时间戳用于日志文件命名
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 # Clarifier 参数（默认启用）
 USE_CLARIFIER=True
@@ -80,7 +74,6 @@ print_help() {
     echo "  -n, --first_n NUM    处理前 N 个样本 (默认: -1, 表示全部)"
     echo "  -p, --n_proc NUM     进程数 (默认: 1)"
     echo "  -c, --chunk_size NUM 批次大小 (默认: 1)"
-    echo "  --use_controller BOOL 是否使用 controller (默认: True)"
     echo "  --use_clarifier BOOL 是否使用 clarifier (默认: True)"
     echo "  --num_parallel NUM   Ollama 并行请求数 (默认: ${OLLAMA_NUM_PARALLEL})"
     echo "  --context_length NUM Ollama 上下文长度 (默认: ${OLLAMA_CONTEXT_LENGTH})"
@@ -244,7 +237,6 @@ run_table_fv() {
         --first_n $FIRST_N \
         --n_proc $N_PROC \
         --chunk_size $CHUNK_SIZE \
-        --use_controller $USE_CONTROLLER \
         --use_clarifier $USE_CLARIFIER
 
     if [ $? -ne 0 ]; then
@@ -316,7 +308,6 @@ run_table_qa() {
         --first_n $FIRST_N \
         --n_proc $N_PROC \
         --chunk_size $CHUNK_SIZE \
-        --use_controller $USE_CONTROLLER \
         --use_clarifier $USE_CLARIFIER
     
     if [ $? -ne 0 ]; then
@@ -363,10 +354,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         -u|--use_multi_agent)
             USE_MULTI_AGENT="$2"
-            shift 2
-            ;;
-        --use_controller)
-            USE_CONTROLLER="$2"
             shift 2
             ;;
         --use_clarifier)
@@ -424,7 +411,6 @@ echo "模型: ${MODEL}"
 echo "处理样本数: ${FIRST_N}"
 echo "进程数: ${N_PROC}"
 echo "批次大小: ${CHUNK_SIZE}"
-echo "使用 Controller: ${USE_CONTROLLER}"
 echo "使用 Clarifier: ${USE_CLARIFIER}"
 echo "Ollama 并行数: ${OLLAMA_NUM_PARALLEL}"
 echo "Ollama 上下文长度: ${OLLAMA_CONTEXT_LENGTH}"
