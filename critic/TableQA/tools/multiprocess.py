@@ -70,6 +70,8 @@ def critic_exec_one_sample(
     blueprint_only=False,
     pre_retrieved_few_shot=None,
     use_verifier=False,
+    use_diff_critic=False,
+    diff_bundle=None,
 ):
     critic_sample = copy.deepcopy(sample)
     prompt = ""
@@ -129,7 +131,15 @@ def critic_exec_one_sample(
         except Exception as e:
             print(f"[WARN] Verifier failed: {e}", flush=True)
 
-    cot, max_step = get_cot_for_critic(critic_sample, verification_report=verification_report)
+    if use_diff_critic and diff_bundle is not None:
+        from .get_info import get_cot_for_critic_diff
+        cot, max_step = get_cot_for_critic_diff(
+            critic_sample,
+            diff_bundle=diff_bundle,
+            verification_report=verification_report,
+        )
+    else:
+        cot, max_step = get_cot_for_critic(critic_sample, verification_report=verification_report)
     prompt += cot
 
     responses = llm.generate_plus_with_score(prompt, options=llm_options)

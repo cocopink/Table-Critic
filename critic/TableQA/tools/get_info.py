@@ -196,6 +196,24 @@ def get_cot_for_critic(sample, verification_report=None):
         print(traceback.format_exc())
         raise
 
+def get_cot_for_critic_diff(sample, diff_bundle=None, verification_report=None):
+    """Build Critic CoT prompt with optional operation diff evidence injected.
+
+    When diff_bundle is provided, inserts an [Operation Diff Evidence] block
+    before the Critique marker. When None, falls back to get_cot_for_critic() exactly.
+    """
+    cot, max_step = get_cot_for_critic(sample, verification_report=verification_report)
+    if diff_bundle is None:
+        return cot, max_step
+    evidence = diff_bundle.to_prompt_block()
+    marker = "Critique:"
+    if marker in cot:
+        cot = cot.replace(marker, evidence + "\n\nCritique:")
+    else:
+        cot += "\n\n" + evidence + "\n\nCritique:"
+    return cot, max_step
+
+
 def get_cot_for_judge(sample):
 
     cot = "Now, determine whether the given Prediction Answer is correct or incorrect, give an explanation and give the conclusion according to the format 'Conclusion: [Correct]' or 'Conclusion: [Incorrect]': \nOriginal Table:\n/*\n"

@@ -857,10 +857,10 @@ class ActionExecutor:
     负责执行 Controller 决策的动作，并更新状态
     """
     
-    def __init__(self, llm, llm_options, use_verifier=False):
+    def __init__(self, llm, llm_options, use_verifier=False, use_diff_critic=False, diff_critic_mode="diagnose_only"):
         """
         初始化执行器
-        
+
         Args:
             llm: 语言模型实例
             llm_options: 模型选项
@@ -868,6 +868,8 @@ class ActionExecutor:
         self.llm = llm
         self.llm_options = llm_options
         self.use_verifier = use_verifier
+        self.use_diff_critic = use_diff_critic
+        self.diff_critic_mode = diff_critic_mode
         
         # 初始化 RetrieverAgent（阶段2：独立检索器）
         from agents import RetrieverAgent
@@ -908,6 +910,24 @@ class ActionExecutor:
             from critic.TableQA.tools import critic_exec_one_sample
             blueprint_only = (action == ControllerAction.DIAGNOSE_BP)
             error_route = state.error_route or "random"
+
+            # Diff-Critic: build diff bundle before Critic call
+            diff_bundle = None
+            if self.use_diff_critic:
+                try:
+                    from refine.TableQA.utils.diff_critic.diff_bundle import build_diff_bundle
+                    diff_bundle = build_diff_bundle(state.sample)
+                    state.sample["_diff_localization"] = {
+                        "step_num": diff_bundle.localization.step_num,
+                        "confidence": diff_bundle.localization.confidence,
+                        "reason": diff_bundle.localization.reason,
+                    }
+                    if DEBUG:
+                        loc = diff_bundle.localization
+                        print(f"[DEBUG DIFF_CRITIC] Bundle built: step={loc.step_num}, conf={loc.confidence:.2f}, reason={loc.reason}")
+                except Exception as exc:
+                    print(f"[WARN] Diff bundle failed: {exc}", flush=True)
+                    diff_bundle = None
             
             # 优化：检查 state 中是否已经有预检索的数据，避免重复检索
             # 更严格地检查：区分 None 和空列表
@@ -929,6 +949,8 @@ class ActionExecutor:
                     blueprint_only=blueprint_only,
                     pre_retrieved_few_shot=pre_retrieved_few_shot,
                     use_verifier=self.use_verifier,
+                    use_diff_critic=self.use_diff_critic,
+                    diff_bundle=diff_bundle,
                 )
             else:
                 # 如果没有预检索数据，才调用 RetrieverAgent（向后兼容）
@@ -956,6 +978,8 @@ class ActionExecutor:
                     blueprint_only=blueprint_only,
                     pre_retrieved_few_shot=pre_retrieved_few_shot,
                     use_verifier=self.use_verifier,
+                    use_diff_critic=self.use_diff_critic,
+                    diff_bundle=diff_bundle,
                 )
             
             state.diagnosis = {
@@ -1158,6 +1182,8 @@ def controller_main_loop(
     thought_results_dir: Optional[str] = None,
     use_verifier: bool = False,
     router_variant: Optional[str] = None,
+    use_diff_critic: bool = False,
+    diff_critic_mode: str = "diagnose_only",
 ) -> Dict[str, Any]:
     """
     Controller 主循环（兼容现有代码，支持 Clarifier）
@@ -1308,7 +1334,7 @@ def controller_main_loop(
 
     # 初始化组件
     # 修复1：先创建 ActionExecutor 以获取 RetrieverAgent 实例
-    executor = ActionExecutor(llm, llm_options, use_verifier=use_verifier)
+    executor = ActionExecutor(llm, llm_options, use_verifier=use_verifier, use_diff_critic=use_diff_critic, diff_critic_mode=diff_critic_mode)
     # 将 retriever 传递给 controller，避免重复创建实例
     controller = MinimalController(llm, llm_options, max_iterations, retriever=executor.retriever)
     
