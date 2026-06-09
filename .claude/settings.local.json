@@ -9,10 +9,16 @@
       "mcp__plugin_episodic-memory_episodic-memory__search",
       "mcp__web-search-prime__web_search_prime",
       "Bash(mkdir -p /home/ubuntu/mnt/lx/new_TC/Table-Critic/.claude/plan)",
-      "Workflow(deep-research)"
+      "Workflow(deep-research)",
+      "Bash(mkdir -p /home/cocopink/code/Table-Critic/.claude/plan)",
+      "Bash(cat)",
+      "Bash(git commit *)",
+      "Bash(cat > *)"
     ],
     "additionalDirectories": [
-      "/home/ubuntu/mnt/lx/new_TC/Table-Critic/.claude/plan"
+      "/home/ubuntu/mnt/lx/new_TC/Table-Critic/.claude/plan",
+      "/home/cocopink/code/Table-Critic/.claude",
+      "/home/cocopink/code/Table-Critic/.git"
     ]
   }
 }
