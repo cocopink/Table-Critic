@@ -7,8 +7,8 @@ import pickle
 
 
 if __name__ == "__main__":
-    data_type = "QA"
-    data_file = "/home/cocopink/code/Table-Critic/test/results/flattened/thought/tabfact/gpt-5.4/final_result.pkl" #final_results.pkl
+    data_type = "FV"
+    data_file = "/home/cocopink/code/Table-Critic/test/results/thought/tabfact/gpt-5.4/final_result.pkl" #final_results.pkl
     ans_list = read_pkl(data_file)
 
     if data_type == "FV":
@@ -20,7 +20,7 @@ if __name__ == "__main__":
             file=open("result.txt", "w")
         )
     
-    else:
+    elif data_type == "QA":
         acc = wikitq_match_func_for_samples(ans_list)
         print("QA(wikiq) Accuracy:", acc)
 
@@ -28,3 +28,5 @@ if __name__ == "__main__":
             f'QA(wikiq) Accuracy: {acc}',
             file=open("result.txt", "w")
         )
+    else:
+        print(ans_list)

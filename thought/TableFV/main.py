@@ -107,9 +107,12 @@ def main(
     final_path = os.path.join(thought_results_dir, "final_result.pkl")
     if os.path.exists(final_path):
         final_result = read_pkl(final_path)
-    else:
+        # 检查缓存是否包含全部 None（上次 LLM 调用失败的残留）
+        if any(s is None for s in final_result):
+            print(f"WARNING: {sum(1 for s in final_result if s is None)}/{len(final_result)} samples in cached final_result are None, re-running fixed chain.")
+            os.remove(final_path)
+    if not os.path.exists(final_path):
         final_result, _ = fixed_chain_exec_mp(gpt_llm, proc_samples, fixed_chain, n_proc=4, chunk_size=2)
-
         pickle.dump(
             final_result, open(os.path.join(thought_results_dir, "final_result.pkl"), "wb")
         )

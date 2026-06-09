@@ -44,13 +44,18 @@ def tabfact_match_func(sample, strategy="top"):
 
 def tabfact_match_func_for_samples(all_samples, strategy="top"):
     correct_list = []
-    for sample in all_samples:
+    error_list = []
+    for i, sample in enumerate(all_samples):
         try:
             if tabfact_match_func(sample, strategy):
                 correct_list.append(1)
             else:
                 correct_list.append(0)
         except:
-            print(f"Error")
+            print(f"Error in sample {i}")
+            error_list.append(i)
             continue
+    if not correct_list:
+        print(f"WARNING: all {len(all_samples)} samples failed evaluation.")
+        return 0.0
     return sum(correct_list) / len(correct_list)

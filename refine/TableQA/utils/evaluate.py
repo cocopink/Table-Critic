@@ -381,13 +381,16 @@ def wikitq_match_func_for_samples(all_samples, strategy="top", tagged_dataset_pa
     
     
     correct_list = []
-    for sample in all_samples:
+    for i, sample in enumerate(all_samples):
         try:
             if wikitq_match_func(sample, target_values_map[sample['ids']], strategy):
                 correct_list.append(1)
             else:
                 correct_list.append(0)
         except:
-            print(f"Error")
+            print(f"Error in sample {i}")
             continue
+    if not correct_list:
+        print(f"WARNING: all {len(all_samples)} samples failed evaluation.")
+        return 0.0
     return sum(correct_list) / len(correct_list)
