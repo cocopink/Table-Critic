@@ -1,6 +1,6 @@
 # API Configuration
-base_url='https://113.44.247.131:47851/v1'
-openai_api_key="$ANTHROPIC_AUTH_TOKEN"
+base_url="${HAOMIAO_URL:-https://113.44.247.131:47851/v1}"
+openai_api_key="${HAOMIAO_AUTHEN_TOKEN:-${HAOMIAO_AUTH_TOKEN:-$ANTHROPIC_AUTH_TOKEN}}"
 model_name='gpt-5.4'
 
 first_n=-1

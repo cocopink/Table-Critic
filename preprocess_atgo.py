@@ -24,6 +24,9 @@ def main(
     output_path: str,
     mode: str = "row",
     cache_dir: str = None,
+    gamma: float = 0.0,
+    inject_graph_hint: bool = False,
+    bias_weight: float = 0.0,
 ):
     """对数据集执行 ATG 单向重排预处理。
 
@@ -32,6 +35,9 @@ def main(
         output_path: 输出 JSONL 文件路径。
         mode: 重排模式, "row" (仅行排) 或 "col" (仅列排)。
         cache_dir: 可选的逐样本 pkl 缓存目录。
+        gamma: P1 列间平滑强度, 0.0 表示关闭。
+        inject_graph_hint: 是否写入 Refine 图提示。
+        bias_weight: P3 Thought 候选偏置强度。
     """
     if mode not in ("row", "col"):
         raise ValueError(f"mode must be 'row' or 'col', got '{mode}'")
@@ -52,12 +58,22 @@ def main(
 
     # 根据模式选择 reranker
     if mode == "row":
-        reranker = ATGOReranker(cache_dir=cache_dir)
+        reranker = ATGOReranker(
+            cache_dir=cache_dir,
+            gamma=gamma,
+            inject_graph_hint=inject_graph_hint,
+            bias_weight=bias_weight,
+        )
         table_key = "atgo_reranked_table"
         changed_key = "_atgo_order_changed"
         desc = "ATGO (row-only)"
     else:
-        reranker = ATGCReranker(cache_dir=cache_dir)
+        reranker = ATGCReranker(
+            cache_dir=cache_dir,
+            gamma=gamma,
+            inject_graph_hint=inject_graph_hint,
+            bias_weight=bias_weight,
+        )
         table_key = "atgc_reranked_table"
         changed_key = "_atgc_order_changed"
         desc = "ATGC (col-only)"
@@ -85,6 +101,10 @@ def main(
                 "statement": sample.get("statement", ""),
                 "table_text": sample.get("table", sample.get("table_text")),
                 table_key: sample[table_key],
+                "graph_metadata": sample.get("graph_metadata", {}),
+                "row_relevance_scores": sample.get("row_relevance_scores", {}),
+                "col_relevance_scores": sample.get("col_relevance_scores", {}),
+                "graph_hint": sample.get("graph_hint", ""),
             })
 
     base, ext = os.path.splitext(output_path)
