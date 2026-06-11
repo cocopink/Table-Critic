@@ -17,6 +17,7 @@ import copy
 import re
 import numpy as np
 from utils.helper import table2string
+from table_structure.graph_bias import apply_graph_bias, canonicalize_candidate
 
 from third_party.select_column_row_prompts.select_column_row_prompts import select_row_demo
 
@@ -51,16 +52,19 @@ def select_row_func(sample, table_info, llm, llm_options=None, debug=False):
             pred = re.findall(pattern_row, res, re.S)[0].strip()
         except Exception:
             continue
-        pred = pred.split(", ")
-        pred = [i.strip() for i in pred]
-        pred = [i.split(" ")[-1] for i in pred]
-        pred = sorted(pred)
-        pred = str(pred)
+        pred = canonicalize_candidate(pred, "row")
         if pred not in pred_conf_dict:
             pred_conf_dict[pred] = 0
         pred_conf_dict[pred] += np.exp(score)
 
     select_row_rank = sorted(pred_conf_dict.items(), key=lambda x: x[1], reverse=True)
+    bias_weight = sample.get("graph_metadata", {}).get("bias_weight", sample.get("_bias_weight", 0.0))
+    select_row_rank = apply_graph_bias(
+        select_row_rank,
+        sample.get("row_relevance_scores", sample.get("_row_relevance_scores", {})),
+        bias_weight,
+        "row",
+    )
 
     thought = "Select relevant rows.\n" + responses[0][0].split("Answer:")[0].strip() if "Answer:" in responses[0][0] else responses[0][0].strip() + "\n"
     

@@ -17,6 +17,7 @@ import subprocess
 import fire
 import os
 import sys
+import pickle
 sys.path.insert(0, 'thought/TableFV')
 sys.path.insert(0, 'critic/TableFV')
 sys.path.insert(0, '.')
@@ -27,6 +28,12 @@ from utils.evaluate import *
 from utils.chain import *
 from operations import *
 from tools.read_pkl import read_pkl
+
+
+def _resolve_openai_api_key(openai_api_key):
+    if openai_api_key == "<env:OPENAI_API_KEY>":
+        return os.environ.get("OPENAI_API_KEY", "EMPTY")
+    return openai_api_key
 
 
 def main(
@@ -41,6 +48,8 @@ def main(
     chunk_size=4,
     use_clarifier: bool = True,
 ):
+    openai_api_key = _resolve_openai_api_key(openai_api_key)
+
     # Auto-switch results directory based on mode
     mode_dir = "new" if use_clarifier else "orig"
     if not thought_results_dir:
@@ -61,7 +70,6 @@ def main(
 
     if use_clarifier:
         from agents.clarifier_agent import ClarifierAgent, create_clarifier_result_path
-        import pickle
 
         # Initialize ClarifierAgent and extract schema anchors
         print("Initializing ClarifierAgent for schema anchoring...")

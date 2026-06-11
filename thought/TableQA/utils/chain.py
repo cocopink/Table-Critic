@@ -125,7 +125,11 @@ def get_act_func(name):
 
 
 def get_table_info(sample, skip_op=[], first_n_op=None):
-    table_text = sample.get("atg_reranked_table") or sample["table_text"]
+    table_text = (
+        sample.get("atg_reranked_table")
+        or sample.get("atgo_reranked_table")
+        or sample["table_text"]
+    )
     chain = sample["chain"]
 
     if first_n_op is not None:
@@ -145,7 +149,11 @@ def get_table_info(sample, skip_op=[], first_n_op=None):
 
 
 def get_table_log(sample, skip_op=[], first_n_op=None):
-    table_text = sample.get("atg_reranked_table") or sample["table_text"]
+    table_text = (
+        sample.get("atg_reranked_table")
+        or sample.get("atgo_reranked_table")
+        or sample["table_text"]
+    )
     chain = sample["chain"]
 
     if first_n_op is not None:
