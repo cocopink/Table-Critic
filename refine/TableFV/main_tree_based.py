@@ -1,5 +1,5 @@
+import multiprocessing as mp
 import pickle
-import subprocess
 import fire
 import os
 import sys
@@ -24,6 +24,23 @@ def _resolve_openai_api_key(openai_api_key):
     return openai_api_key
 
 
+def _refine_one_sample_mp_core(arg):
+    """Worker function for multiprocessing refinement of a single sample."""
+    (llm, sample, sample_idx, llm_options, cache_dir,
+     use_clarifier, thought_results_dir, max_iterations) = arg
+    try:
+        refined = controller_main_loop(
+            sample, llm=llm, llm_options=llm_options,
+            max_iterations=max_iterations, cache_dir=cache_dir,
+            sample_idx=sample_idx, use_clarifier=use_clarifier,
+            thought_results_dir=thought_results_dir,
+        )
+        return sample_idx, refined
+    except Exception as e:
+        print(f"Error refining sample {sample_idx}: {e}")
+        return sample_idx, sample
+
+
 def main(
     thought_results_dir: str = "",
     refine_results_dir: str = "",
@@ -46,20 +63,19 @@ def main(
         refine_results_dir = f"results/{mode_dir}/refine/{model_dir}"
 
     result_pkl = os.path.join(thought_results_dir, "final_result.pkl")
-    
+
     if first_n != -1:
         all_samples = read_pkl(result_pkl)[:first_n]
     else:
         all_samples = read_pkl(result_pkl)
 
-    # print("main_first_n",first_n,len(all_samples))
-    
     gpt_llm = LLM(
         model_name=model_name,
         key=openai_api_key,
         base=base_url
     )
-        # Create results directory structure
+
+    # Create results directory structure
     os.makedirs(refine_results_dir, exist_ok=True)
     cache_dir = os.path.join(refine_results_dir, "cache")
     os.makedirs(cache_dir, exist_ok=True)
@@ -70,35 +86,49 @@ def main(
     # Use controller-based refinement
     print("Using controller-based refinement...")
     print(f"Clarifier enabled: {use_clarifier}")
+    print(f"Concurrency: n_proc={n_proc}, chunk_size={chunk_size}")
 
-    # Process samples with controller
-    refined_samples = []
-    print(len(all_samples))
-    for idx, sample in tqdm(enumerate(all_samples), total=len(all_samples), desc="Controller-based refinement"):
-        # Skip None samples (failed in thought stage)
-        if sample is None:
-            print(f"Warning: Sample {idx} is None (failed in thought stage), skipping...")
-            continue
+    llm_options = gpt_llm.get_model_options(
+        temperature=0,
+        per_example_max_decode_steps=2048,
+        per_example_top_p=1
+    )
 
-        sample_id = sample.get('id', idx)
+    if n_proc > 1:
+        # Multiprocessing mode: mp.Pool + imap_unordered
+        args_list = [
+            (gpt_llm, sample, idx, llm_options, cache_dir,
+             use_clarifier, thought_results_dir, 2)
+            for idx, sample in enumerate(all_samples) if sample is not None
+        ]
 
-        # Use Controller main loop with cache support
-        refined_sample = controller_main_loop(
-            sample,
-            llm=gpt_llm,
-            llm_options=gpt_llm.get_model_options(
-                temperature=0,
-                per_example_max_decode_steps=2048,
-                per_example_top_p=1
-            ),
-            max_iterations=2,
-            cache_dir=cache_dir,
-            sample_idx=idx,
-            use_clarifier=use_clarifier,
-            thought_results_dir=thought_results_dir,
-        )
+        refined_samples = [None] * len(all_samples)
+        with mp.Pool(n_proc) as pool:
+            for ret_idx, refined in tqdm(
+                pool.imap_unordered(_refine_one_sample_mp_core, args_list, chunksize=chunk_size),
+                total=len(args_list),
+                desc="Controller-based refinement (mp)",
+            ):
+                refined_samples[ret_idx] = refined
+    else:
+        # Single-threaded mode (original behavior)
+        refined_samples = [None] * len(all_samples)
+        for idx, sample in tqdm(enumerate(all_samples), total=len(all_samples), desc="Controller-based refinement"):
+            if sample is None:
+                print(f"Warning: Sample {idx} is None (failed in thought stage), skipping...")
+                continue
 
-        refined_samples.append(refined_sample)
+            refined_sample = controller_main_loop(
+                sample,
+                llm=gpt_llm,
+                llm_options=llm_options,
+                max_iterations=2,
+                cache_dir=cache_dir,
+                sample_idx=idx,
+                use_clarifier=use_clarifier,
+                thought_results_dir=thought_results_dir,
+            )
+            refined_samples[idx] = refined_sample
 
     refine_list = refined_samples
 

@@ -46,15 +46,22 @@ TASK_TYPE="QA"
 # Clarifier 参数（默认启用）
 USE_CLARIFIER=True
 
+# ============== Graph Enhancement (P1+P2) ==============
+ENABLE_P1="${ENABLE_P1:-true}"     # P1: ATGO gamma smoothing
+ENABLE_P2="${ENABLE_P2:-true}"     # P2: inject graph hints for Refine
+P1_GAMMA="${P1_GAMMA:-0.1}"      # P1 gamma value
+
 # 结果目录配置（不包含模型名，将在运行时动态添加）
-# BASE_THOUGHT_RESULTS_FV='results/thought_100/tabfact'
-# BASE_REFINE_RESULTS_FV='results/refine_100/tabfact'
-# BASE_THOUGHT_RESULTS_QA='results/thought_100/wikitq'
-# BASE_REFINE_RESULTS_QA='results/refine_100/wikitq'
 BASE_THOUGHT_RESULTS_FV='results/thought/tabfact'
 BASE_REFINE_RESULTS_FV='results/refine_clarifier/tabfact'
 BASE_THOUGHT_RESULTS_QA='results/thought/wikitq'
 BASE_REFINE_RESULTS_QA='results/refine_clarifier/wikitq'
+
+# 数据目录
+DATA_DIR_FV="thought/TableFV/data/tabfact"
+DATA_DIR_QA="thought/TableQA/data/wikitq"
+ORIGINAL_DATA_FV="${DATA_DIR_FV}/test.jsonl"
+ORIGINAL_DATA_QA="${DATA_DIR_QA}/test_lower.jsonl"
 
 # ========================================
 # 函数定义
@@ -75,6 +82,9 @@ print_help() {
     echo "  -p, --n_proc NUM     进程数 (默认: 1)"
     echo "  -c, --chunk_size NUM 批次大小 (默认: 1)"
     echo "  --use_clarifier BOOL 是否使用 clarifier (默认: True)"
+    echo "  --enable_p1 BOOL     启用 P1: ATGO gamma 平滑 (默认: ${ENABLE_P1})"
+    echo "  --enable_p2 BOOL     启用 P2: 图提示注入 (默认: ${ENABLE_P2})"
+    echo "  --p1_gamma FLOAT     P1 gamma 值 (默认: ${P1_GAMMA})"
     echo "  --num_parallel NUM   Ollama 并行请求数 (默认: ${OLLAMA_NUM_PARALLEL})"
     echo "  --context_length NUM Ollama 上下文长度 (默认: ${OLLAMA_CONTEXT_LENGTH})"
     echo "  -h, --help           显示此帮助信息"
@@ -83,6 +93,7 @@ print_help() {
     echo "  $0 -t FV -m qwen2.5:14b"
     echo "  $0 -t QA -m llama3.1:8b"
     echo "  $0 -t QA -m qwen3:32b --num_parallel 2 --context_length 65536"
+    echo "  $0 -t FV -m qwen2.5:14b --enable_p1 true --enable_p2 true"
     echo ""
     echo "常用 Ollama 模型:"
     echo "  - qwen2.5:14b"
@@ -123,7 +134,7 @@ start_ollama() {
     export OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH"
     ollama serve > /dev/null 2>&1 &
     OLLAMA_PID=$!
-    
+
     # 等待服务启动
     echo "等待 Ollama 服务启动..."
     for i in {1..30}; do
@@ -133,7 +144,7 @@ start_ollama() {
         fi
         sleep 1
     done
-    
+
     echo -e "${RED}错误: Ollama 服务启动超时${NC}"
     exit 1
 }
@@ -142,7 +153,7 @@ start_ollama() {
 check_model() {
     local model=$1
     echo "检查模型: ${model}"
-    
+
     local model_list=$(ollama list 2>&1)
     if echo "$model_list" | grep -q "$model"; then
         echo -e "${GREEN}✓ 模型 ${model} 已存在${NC}"
@@ -164,7 +175,7 @@ check_model() {
 test_ollama_api() {
     local model=$1
     echo "测试 Ollama API 连接..."
-    
+
     local response=$(curl -s "${OLLAMA_API_BASE}/chat/completions" \
         -H "Content-Type: application/json" \
         -d "{
@@ -172,7 +183,7 @@ test_ollama_api() {
             \"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}],
             \"max_tokens\": 10
         }")
-    
+
     if echo "$response" | grep -q "content"; then
         echo -e "${GREEN}✓ Ollama API 连接成功${NC}"
         return 0
@@ -186,51 +197,93 @@ test_ollama_api() {
 # 运行 TableFV 任务
 run_table_fv() {
     local model=$1
-    
+
     # 构建包含模型名的结果目录
-    local thought_results_dir="${BASE_THOUGHT_RESULTS_FV}/${model}"
-    local refine_results_dir="${BASE_REFINE_RESULTS_FV}/${model}"
-    
+    local base_thought="${BASE_THOUGHT_RESULTS_FV}/${model}"
+    local base_refine="${BASE_REFINE_RESULTS_FV}/${model}"
+
+    local original_data="$ORIGINAL_DATA_FV"
+    local atgo_data="${DATA_DIR_FV}/test_reranked_row.jsonl"
+
+    # 根据 P1/P2 决定数据源和结果目录
+    if [ "$ENABLE_P1" = "true" ]; then
+        local graph_suffix="_p12"
+        local thought_results_dir="${base_thought}${graph_suffix}"
+        local refine_results_dir="${base_refine}${graph_suffix}"
+    else
+        local thought_results_dir="$base_thought"
+        local refine_results_dir="$base_refine"
+    fi
+
     echo "=========================================="
     echo "开始运行 TableFV 任务"
     echo "=========================================="
     echo "模型: ${model}"
     echo "API 地址: ${OLLAMA_API_BASE}"
+    echo "P1+P2: ${ENABLE_P1}"
+    echo "Graph suffix: ${graph_suffix:-"(none)"}"
     echo "Thought 结果目录: ${thought_results_dir}"
     echo "Refine 结果目录: ${refine_results_dir}"
     echo "=========================================="
-    
+
+    # Stage 0.7: ATGO Row Reranking (P1+P2)
+    if [ "$ENABLE_P1" = "true" ]; then
+        echo ""
+        echo "=========================================="
+        echo "Stage 0.7: ATGO Row-only Reranking (P1=${ENABLE_P1}, P2=${ENABLE_P2})"
+        echo "=========================================="
+
+        python3 preprocess_atgo.py \
+            --mode row \
+            --dataset_path "$original_data" \
+            --output_path "$atgo_data" \
+            --gamma $P1_GAMMA \
+            --inject_graph_hint True
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}错误: ATGO row reranking 执行失败${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ ATGO row reranking 完成${NC}"
+
+        local dataset_to_use="$atgo_data"
+    else
+        local dataset_to_use="$original_data"
+    fi
+
     # Thought 阶段
     echo ""
     echo "=========================================="
     echo "TableFV Thought 阶段"
     echo "=========================================="
-    
+
     python3 thought/TableFV/main.py \
-        --thought_results_dir $thought_results_dir \
+        --dataset_path "$dataset_to_use" \
+        --thought_results_dir "$thought_results_dir" \
         --base_url $OLLAMA_API_BASE \
         --openai_api_key $OLLAMA_API_KEY \
         --model_name $model \
         --first_n $FIRST_N \
         --n_proc $N_PROC \
-        --chunk_size $CHUNK_SIZE
-    
+        --chunk_size $CHUNK_SIZE \
+        --use_clarifier $USE_CLARIFIER
+
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: thought/TableFV/main.py 执行失败${NC}"
         exit 1
     fi
-    
+
     echo -e "${GREEN}✓ TableFV Thought 阶段完成${NC}"
-    
+
     # Refine 阶段
     echo ""
     echo "=========================================="
     echo "TableFV Refine 阶段"
     echo "=========================================="
-    
+
     python3 refine/TableFV/main_tree_based.py \
-        --thought_results_dir $thought_results_dir \
-        --refine_results_dir $refine_results_dir \
+        --thought_results_dir "$thought_results_dir" \
+        --refine_results_dir "$refine_results_dir" \
         --base_url $OLLAMA_API_BASE \
         --openai_api_key $OLLAMA_API_KEY \
         --model_name $model \
@@ -243,9 +296,9 @@ run_table_fv() {
         echo -e "${RED}错误: refine/TableFV/main_tree_based.py 执行失败${NC}"
         exit 1
     fi
-    
+
     echo -e "${GREEN}✓ TableFV Refine 阶段完成${NC}"
-    
+
     echo ""
     echo "=========================================="
     echo -e "${GREEN}TableFV 任务完成！${NC}"
@@ -257,51 +310,69 @@ run_table_fv() {
 # 运行 TableQA 任务
 run_table_qa() {
     local model=$1
-    
+
     # 构建包含模型名的结果目录
-    local thought_results_dir="${BASE_THOUGHT_RESULTS_QA}/${model}"
-    local refine_results_dir="${BASE_REFINE_RESULTS_QA}/${model}"
-    
+    local base_thought="${BASE_THOUGHT_RESULTS_QA}/${model}"
+    local base_refine="${BASE_REFINE_RESULTS_QA}/${model}"
+
+    local original_data="$ORIGINAL_DATA_QA"
+    local atgo_data="${DATA_DIR_QA}/test_reranked_row.jsonl"
+
+    # 根据 P1/P2 决定数据源和结果目录
+    if [ "$ENABLE_P1" = "true" ]; then
+        local graph_suffix="_p12"
+        local thought_results_dir="${base_thought}${graph_suffix}"
+        local refine_results_dir="${base_refine}${graph_suffix}"
+    else
+        local thought_results_dir="$base_thought"
+        local refine_results_dir="$base_refine"
+    fi
+
     echo "=========================================="
     echo "开始运行 TableQA 任务"
     echo "=========================================="
     echo "模型: ${model}"
     echo "API 地址: ${OLLAMA_API_BASE}"
+    echo "P1+P2: ${ENABLE_P1}"
+    echo "Graph suffix: ${graph_suffix:-"(none)"}"
     echo "Thought 结果目录: ${thought_results_dir}"
     echo "Refine 结果目录: ${refine_results_dir}"
     echo "=========================================="
-    
+
+    # Stage 0.7: ATGO Row Reranking (P1+P2)
+    if [ "$ENABLE_P1" = "true" ]; then
+        echo ""
+        echo "=========================================="
+        echo "Stage 0.7: ATGO Row-only Reranking (P1=${ENABLE_P1}, P2=${ENABLE_P2})"
+        echo "=========================================="
+
+        python3 preprocess_atgo.py \
+            --mode row \
+            --dataset_path "$original_data" \
+            --output_path "$atgo_data" \
+            --gamma $P1_GAMMA \
+            --inject_graph_hint True
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}错误: ATGO row reranking 执行失败${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ ATGO row reranking 完成${NC}"
+
+        local dataset_to_use="$atgo_data"
+    else
+        local dataset_to_use="$original_data"
+    fi
+
     # Thought 阶段
     echo ""
     echo "=========================================="
     echo "TableQA Thought 阶段"
     echo "=========================================="
-    
+
     python3 thought/TableQA/main.py \
-        --thought_results_dir $thought_results_dir \
-        --base_url $OLLAMA_API_BASE \
-        --openai_api_key $OLLAMA_API_KEY \
-        --model_name $model \
-        --first_n $FIRST_N \
-        --n_proc $N_PROC \
-        --chunk_size $CHUNK_SIZE
-    
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}错误: thought/TableQA/main.py 执行失败${NC}"
-        exit 1
-    fi
-    
-    echo -e "${GREEN}✓ TableQA Thought 阶段完成${NC}"
-    
-    # Refine 阶段
-    echo ""
-    echo "=========================================="
-    echo "TableQA Refine 阶段"
-    echo "=========================================="
-    
-    python3 refine/TableQA/main_tree_based.py \
-        --thought_results_dir $thought_results_dir \
-        --refine_results_dir $refine_results_dir \
+        --dataset_path "$dataset_to_use" \
+        --thought_results_dir "$thought_results_dir" \
         --base_url $OLLAMA_API_BASE \
         --openai_api_key $OLLAMA_API_KEY \
         --model_name $model \
@@ -309,14 +380,38 @@ run_table_qa() {
         --n_proc $N_PROC \
         --chunk_size $CHUNK_SIZE \
         --use_clarifier $USE_CLARIFIER
-    
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}错误: thought/TableQA/main.py 执行失败${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ TableQA Thought 阶段完成${NC}"
+
+    # Refine 阶段
+    echo ""
+    echo "=========================================="
+    echo "TableQA Refine 阶段"
+    echo "=========================================="
+
+    python3 refine/TableQA/main_tree_based.py \
+        --thought_results_dir "$thought_results_dir" \
+        --refine_results_dir "$refine_results_dir" \
+        --base_url $OLLAMA_API_BASE \
+        --openai_api_key $OLLAMA_API_KEY \
+        --model_name $model \
+        --first_n $FIRST_N \
+        --n_proc $N_PROC \
+        --chunk_size $CHUNK_SIZE \
+        --use_clarifier $USE_CLARIFIER
+
     if [ $? -ne 0 ]; then
         echo -e "${RED}错误: refine/TableQA/main_tree_based.py 执行失败${NC}"
         exit 1
     fi
-    
+
     echo -e "${GREEN}✓ TableQA Refine 阶段完成${NC}"
-    
+
     echo ""
     echo "=========================================="
     echo -e "${GREEN}TableQA 任务完成！${NC}"
@@ -360,6 +455,18 @@ while [[ $# -gt 0 ]]; do
             USE_CLARIFIER="$2"
             shift 2
             ;;
+        --enable_p1)
+            ENABLE_P1="$2"
+            shift 2
+            ;;
+        --enable_p2)
+            ENABLE_P2="$2"
+            shift 2
+            ;;
+        --p1_gamma)
+            P1_GAMMA="$2"
+            shift 2
+            ;;
         --num_parallel)
             OLLAMA_NUM_PARALLEL="$2"
             shift 2
@@ -383,6 +490,14 @@ done
 # 设置默认模型
 if [ -z "$MODEL" ]; then
     MODEL=$DEFAULT_MODEL
+fi
+
+# Validate P1/P2 combination: only both-on or both-off are allowed
+if [ "$ENABLE_P1" != "$ENABLE_P2" ]; then
+    echo -e "${RED}错误: ENABLE_P1 and ENABLE_P2 must be both true or both false.${NC}"
+    echo -e "${RED}   Partial combinations (P1-only or P2-only) are not supported.${NC}"
+    echo "   See docs/graph_experiment_analysis_report.md for experiment details."
+    exit 1
 fi
 
 # 检查任务类型
@@ -412,6 +527,8 @@ echo "处理样本数: ${FIRST_N}"
 echo "进程数: ${N_PROC}"
 echo "批次大小: ${CHUNK_SIZE}"
 echo "使用 Clarifier: ${USE_CLARIFIER}"
+echo "P1: ${ENABLE_P1} (gamma=${P1_GAMMA})"
+echo "P2: ${ENABLE_P2}"
 echo "Ollama 并行数: ${OLLAMA_NUM_PARALLEL}"
 echo "Ollama 上下文长度: ${OLLAMA_CONTEXT_LENGTH}"
 echo "=========================================="

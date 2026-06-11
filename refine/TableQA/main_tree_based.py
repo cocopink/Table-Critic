@@ -1,3 +1,4 @@
+import multiprocessing as mp
 import pickle
 import subprocess
 import fire
@@ -22,6 +23,28 @@ def _resolve_openai_api_key(openai_api_key):
     if openai_api_key == "<env:OPENAI_API_KEY>":
         return os.environ.get("OPENAI_API_KEY", "EMPTY")
     return openai_api_key
+
+
+def _refine_one_sample_mp_core(arg):
+    """Worker function for multiprocessing refinement of a single sample."""
+    (llm, sample, sample_idx, llm_options, cache_dir,
+     use_clarifier, thought_results_dir, max_iterations,
+     use_verifier, use_diff_critic, diff_critic_mode, router_variant) = arg
+    try:
+        refined = controller_main_loop(
+            sample, llm=llm, llm_options=llm_options,
+            max_iterations=max_iterations, cache_dir=cache_dir,
+            sample_idx=sample_idx, use_clarifier=use_clarifier,
+            thought_results_dir=thought_results_dir,
+            use_verifier=use_verifier,
+            use_diff_critic=use_diff_critic,
+            diff_critic_mode=diff_critic_mode,
+            router_variant=router_variant,
+        )
+        return sample_idx, refined
+    except Exception as e:
+        print(f"Error refining sample {sample_idx}: {e}")
+        return sample_idx, sample
 
 
 def main(
@@ -76,52 +99,77 @@ def main(
     print(f"Verifier enabled: {use_verifier}")
     print(f"Diff-Critic enabled: {use_diff_critic} (mode: {diff_critic_mode})")
     print(f"Router variant: {router_variant or 'none (standard FULL)'}")
+    print(f"Concurrency: n_proc={n_proc}, chunk_size={chunk_size}")
 
-    # Process samples with controller
-    refined_samples = []
-    route_stats = {"SKIP": 0, "LITE": 0, "FULL": 0}
-    for idx, sample in tqdm(enumerate(all_samples), total=len(all_samples), desc="Controller-based refinement"):
-        # Skip None samples (failed in thought stage)
+    # Filter out None samples (failed in thought stage)
+    valid_entries = []
+    for idx, sample in enumerate(all_samples):
         if sample is None:
             print(f"Warning: Sample {idx} is None (failed in thought stage), skipping...")
-            continue
+            valid_entries.append((idx, None))
+        else:
+            valid_entries.append((idx, sample))
 
-        sample_id = sample.get('id', idx)
+    llm_options = gpt_llm.get_model_options(
+        temperature=0,
+        per_example_max_decode_steps=2048,
+        per_example_top_p=1
+    )
 
-        # Use Controller main loop with cache support
-        refined_sample = controller_main_loop(
-            sample,
-            llm=gpt_llm,
-            llm_options=gpt_llm.get_model_options(
-                temperature=0,
-                per_example_max_decode_steps=2048,
-                per_example_top_p=1
-            ),
-            max_iterations=2,
-            cache_dir=cache_dir,
-            sample_idx=idx,
-            use_clarifier=use_clarifier,
-            thought_results_dir=thought_results_dir,
-            use_verifier=use_verifier,
-            router_variant=router_variant or None,
-            use_diff_critic=use_diff_critic,
-            diff_critic_mode=diff_critic_mode,
-        )
-        # 若要控制debug 在controller 中DEBUG变量的修改
-        refined_samples.append(refined_sample)
+    if n_proc > 1:
+        # Multiprocessing mode: mp.Pool + imap_unordered
+        args_list = [
+            (gpt_llm, sample, idx, llm_options, cache_dir,
+             use_clarifier, thought_results_dir, 2,
+             use_verifier, use_diff_critic, diff_critic_mode,
+             router_variant or None)
+            for idx, sample in valid_entries if sample is not None
+        ]
 
-        if router_variant:
-            route = refined_sample.get("_route", "UNKNOWN")
-            route_stats[route] = route_stats.get(route, 0) + 1
+        refined_samples = [None] * len(all_samples)
+        with mp.Pool(n_proc) as pool:
+            for ret_idx, refined in tqdm(
+                pool.imap_unordered(_refine_one_sample_mp_core, args_list, chunksize=chunk_size),
+                total=len(args_list),
+                desc="Controller-based refinement (mp)",
+            ):
+                refined_samples[ret_idx] = refined
+    else:
+        # Single-threaded mode (original behavior)
+        refined_samples = [None] * len(all_samples)
+        for idx, sample in tqdm(enumerate(all_samples), total=len(all_samples), desc="Controller-based refinement"):
+            if sample is None:
+                continue
+
+            refined_sample = controller_main_loop(
+                sample,
+                llm=gpt_llm,
+                llm_options=llm_options,
+                max_iterations=2,
+                cache_dir=cache_dir,
+                sample_idx=idx,
+                use_clarifier=use_clarifier,
+                thought_results_dir=thought_results_dir,
+                use_verifier=use_verifier,
+                router_variant=router_variant or None,
+                use_diff_critic=use_diff_critic,
+                diff_critic_mode=diff_critic_mode,
+            )
+            refined_samples[idx] = refined_sample
 
     refine_list = refined_samples
 
     # Print route distribution
-    if router_variant and any(v > 0 for v in route_stats.values()):
+    if router_variant:
+        route_stats = {}
+        for s in refine_list:
+            if s is not None:
+                route = s.get("_route", "UNKNOWN")
+                route_stats[route] = route_stats.get(route, 0) + 1
         total = sum(route_stats.values())
-        print(f"\n[ROUTER] Route distribution ({router_variant}):")
-        for route, count in route_stats.items():
-            if count > 0:
+        if total > 0:
+            print(f"\n[ROUTER] Route distribution ({router_variant}):")
+            for route, count in route_stats.items():
                 pct = count / total * 100
                 print(f"  {route}: {count} ({pct:.1f}%)")
 
