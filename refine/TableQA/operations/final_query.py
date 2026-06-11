@@ -1,6 +1,7 @@
 import copy
 import numpy as np
 from utils.helper import table2string
+from table_structure.context import get_graph_hint
 
 from operations import *
 
@@ -309,6 +310,9 @@ def simple_query_with_critic(sample, table_info, llm, debug=False, use_demo=True
         prompt += "\nHere are some examples:\n\n"
         prompt += cot_demo + "\n\n"
     
+    graph_hint = get_graph_hint(sample)
+    if graph_hint:
+        prompt += graph_hint + "\n\n"
 
     prompt += "Now, we have answered a question based on a table, but gained a critique.\n"
 

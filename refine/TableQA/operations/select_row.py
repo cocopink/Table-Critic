@@ -2,6 +2,7 @@ import copy
 import re
 import numpy as np
 from utils.helper import table2string
+from table_structure.context import get_graph_hint
 
 from third_party.select_column_row_prompts.select_column_row_prompts import select_row_demo
 
@@ -28,6 +29,9 @@ def select_row_func(sample, table_info, llm, llm_options=None, debug=False, crit
     if critic:
         prompt += critic
     prompt += select_row_build_prompt(table_text, statement, table_caption, table_analysis=sample.get("table_analysis"))
+    graph_hint = get_graph_hint(sample)
+    if graph_hint:
+        prompt += "\n" + graph_hint + "\n"
 
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
 

@@ -5,6 +5,7 @@ import re
 import numpy as np
 from utils.helper import table2df, NoIndent, MyEncoder
 from pylcs import lcs
+from table_structure.context import get_graph_hint
 
 from third_party.select_column_row_prompts.select_column_row_prompts import select_column_demo
 
@@ -70,6 +71,10 @@ def select_column_func(sample, table_info, llm, llm_options, debug=False, num_ro
         if 'column_mapping' in clarifier_info and clarifier_info['column_mapping']:
             prompt += f"- Column Mapping: {clarifier_info['column_mapping']}\n"
         prompt += "\n"
+
+    graph_hint = get_graph_hint(sample)
+    if graph_hint:
+        prompt += graph_hint + "\n"
 
     responses = llm.generate_plus_with_score(prompt, options=llm_options)
 

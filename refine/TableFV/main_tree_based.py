@@ -17,6 +17,13 @@ from operations import *
 from tools import read_pkl
 from utils.controller import controller_main_loop
 
+
+def _resolve_openai_api_key(openai_api_key):
+    if openai_api_key == "<env:OPENAI_API_KEY>":
+        return os.environ.get("OPENAI_API_KEY", "EMPTY")
+    return openai_api_key
+
+
 def main(
     thought_results_dir: str = "",
     refine_results_dir: str = "",
@@ -28,6 +35,8 @@ def main(
     chunk_size=1,
     use_clarifier: bool = True,
 ):
+    openai_api_key = _resolve_openai_api_key(openai_api_key)
+
     # Auto-switch results directory
     mode_dir = "new"
     model_dir = f"tabfact/{model_name}"
