@@ -13,12 +13,15 @@
       "Bash(mkdir -p /home/cocopink/code/Table-Critic/.claude/plan)",
       "Bash(cat)",
       "Bash(git commit *)",
-      "Bash(cat > *)"
+      "Bash(cat > *)",
+      "Read(//home/cocopink/**)",
+      "Bash(echo 'export PATH=~/.npm-global/bin:$PATH')"
     ],
     "additionalDirectories": [
       "/home/ubuntu/mnt/lx/new_TC/Table-Critic/.claude/plan",
       "/home/cocopink/code/Table-Critic/.claude",
-      "/home/cocopink/code/Table-Critic/.git"
+      "/home/cocopink/code/Table-Critic/.git",
+      "/home/cocopink/code/Table-Critic/.claude/plan"
     ]
   }
 }
