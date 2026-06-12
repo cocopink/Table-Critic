@@ -46,7 +46,7 @@ Gamma only affects Stage 0 (ATGO reranking). It changes the **row ordering** of 
 - **Model**: Qwen3.5:35B INT4 via Ollama (localhost:11434/v1)
 - **Dataset**: TabFact (165 samples)
 - **Hardware**: NVIDIA 5090 32GB (INT4 ≈ 22GB model + 10GB KV cache = ~32GB, fits with margin)
-- **Context length**: Must set `OLLAMA_NUM_CTX=8192` (pipeline prompts typically 2500-4500 tokens; Ollama default 2048 is insufficient)
+- **Context length**: Must set `OLLAMA_NUM_CTX=32768` (pipeline prompts typically 2500-4500 tokens; Ollama default 4096 is insufficient)
 - **Model selection rationale**: Qwen3.5 > Qwen3 at same scale (newer generation). 35B INT4 retains more reasoning capability than 9B FP16, providing better sensitivity to gamma-induced input ordering changes for clearer coarse sweep curves. INT4 quantization loss is acceptable for coarse sweep (relative ranking, not absolute accuracy).
 - **Fallback**: If OOM occurs, reduce to `chunk_size=1`; fall back to Qwen3.6:9B Q4_K_M if needed.
 - **Purpose**: Identify top-3 gamma candidates from accuracy curve
