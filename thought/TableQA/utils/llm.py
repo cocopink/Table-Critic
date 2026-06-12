@@ -2,6 +2,8 @@ import openai
 from openai import OpenAI
 import time
 import numpy as np
+import requests
+
 
 class LLM:
     def __init__(self, model_name, key, base):
@@ -13,6 +15,61 @@ class LLM:
         self.output_tokens = 0
         self._token_log_dir = None
         self._run_tag = ""
+
+    @property
+    def _is_ollama_qwen(self):
+        """Qwen 模型通过 Ollama 运行时需要走原生 API 来禁用思考模式。"""
+        return self.model_name.startswith('qwen')
+
+    def _get_ollama_native_url(self):
+        """从 OpenAI 兼容 base_url 推导 Ollama 原生 API 地址。
+        e.g. http://localhost:11434/v1 -> http://localhost:11434/api/chat
+        """
+        base = self.base.rstrip('/')
+        if base.endswith('/v1'):
+            base = base[:-3]
+        return f"{base}/api/chat"
+
+    def _ollama_native_chat(self, messages, options, stop=None):
+        """调用 Ollama 原生 /api/chat 端点，传入 think=false。
+
+        Ollama 0.24.0 的 /v1/ 兼容端点完全忽略 think 参数，
+        导致 Qwen 模型始终思考并消耗 max_tokens 预算，content 为空。
+        原生 /api/chat 端点正确支持 think=false。
+        """
+        url = self._get_ollama_native_url()
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "think": False,
+            "stream": False,
+            "options": {
+                "num_predict": options.get("max_tokens", 150),
+                "temperature": options.get("temperature", 0),
+                "top_p": options.get("top_p", 1),
+            },
+        }
+        if stop:
+            payload["stop"] = stop if isinstance(stop, list) else [stop]
+
+        resp = requests.post(url, json=payload, timeout=600.0)
+        resp.raise_for_status()
+        data = resp.json()
+
+        content = data.get("message", {}).get("content", "")
+
+        # Token 统计
+        prompt_tokens = data.get("prompt_eval_count", 0)
+        completion_tokens = data.get("eval_count", 0)
+        self.input_tokens += prompt_tokens
+        self.output_tokens += completion_tokens
+        self._log_token_usage(prompt_tokens, completion_tokens)
+
+        if not content:
+            print("[WARNING] Ollama returned empty content", flush=True)
+
+        # 返回与 generate_plus_with_score 相同的格式: [(text, log_conf)]
+        return [(content, 0.0)]
 
     def set_token_log_dir(self, log_dir, run_tag=""):
         """设置token日志目录和运行标签，启用后每次API调用会自动追加写入"""
@@ -83,6 +140,23 @@ class LLM:
             },
             {"role": "user", "content": prompt},
         ]
+
+        # Qwen via Ollama: 走原生 API 以禁用思考模式
+        if self._is_ollama_qwen:
+            retry_num = 0
+            retry_limit = 2
+            while True:
+                try:
+                    return self._ollama_native_chat(messages, options, stop=end_str)
+                except Exception as e:
+                    print(f"[Qwen Ollama] Error: {e}", flush=True)
+                    retry_num += 1
+                    if retry_num > retry_limit:
+                        print("[WARNING] Qwen Ollama failed, returning PLACEHOLDER", flush=True)
+                        return [("PLACEHOLDER", 0.0)]
+                    time.sleep(60)
+
+        # GPT 及其他模型: 走 OpenAI SDK 标准路径
         gpt_responses = None
         retry_num = 0
         retry_limit = 2
