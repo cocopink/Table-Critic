@@ -3,9 +3,9 @@
 # Run all baseline methods on WikiTQ and TabFact
 # ===========================================================================
 
-MODEL="${MODEL:-gpt-5.4}"
-BASE_URL="${BASE_URL:-https://yunwu.ai/v1}"
-OPENAI_API_KEY="${OPENAI_API_KEY:-$YUNWU_API_KEY}"
+MODEL="${MODEL:-qwen3.6-plus}" # glm-5.1
+BASE_URL="${BASE_URL:-https://113.44.247.131:47851/v1}"
+OPENAI_API_KEY="${OPENAI_API_KEY:-$ANTHROPIC_AUTH_TOKEN}"
 N_PROC="${N_PROC:-8}"
 FIRST_N="${FIRST_N:--1}"
 COT_CONSIST_N="${COT_CONSIST_N:-4}"

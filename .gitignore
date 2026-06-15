@@ -20,3 +20,21 @@ Thumbs.db
 # Project-specific
 nohup.out
 result.txt
+
+logs/
+__pycache__/
+.agents/
+.claude/
+.*/
+
+test/
+tests/
+test_0613/
+*_cache/
+*.jsonl
+docs/
+*.json
+CLAUDE.md
+*.txt
+
+results/

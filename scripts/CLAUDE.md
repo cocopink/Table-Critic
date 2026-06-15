@@ -28,6 +28,7 @@ Scripts 目录包含 Table-Critic 的**实验辅助脚本**，用于 pilot 数�
 | `summarize_refine_experiment.py` | 基线 vs 实验的成对对比报告 | M0 |
 | `rebuild_final_result.py` | 从缓存重建 final_result.pkl | 辅助 |
 | `openai_smoke_test.py` | OpenAI-compatible 接口连通性与鉴权烟测 | 辅助 |
+| `openai_batch_smoke_test.py` | 批量模型 OpenAI-compatible 连通性烟测 | 辅助 |
 
 ---
 
@@ -87,6 +88,29 @@ python scripts/openai_smoke_test.py --model gpt-5.4
 - `api_key` 优先读取 `HAOMIAO_AUTH_TOKEN`，再兼容 `HAOMIAO_AUTHEN_TOKEN` / `OPENAI_API_KEY`
 - `model` 默认 `gpt-5.4`
 - 请求使用最小化 chat completions 调用
+
+### openai_batch_smoke_test.py
+
+用于批量验证模型名在 OpenAI-compatible 接口上的连通性。默认读取 `configs/llm_providers.json` 中的 `current-gpt54`，并使用内置的 25 个候选模型列表。
+
+```bash
+python scripts/openai_batch_smoke_test.py
+```
+
+常用参数：
+- `--provider`: 指定 `configs/llm_providers.json` 中的 provider 名称，默认 `current-gpt54`
+- `--provider-file`: 指定 provider 配置文件，默认 `configs/llm_providers.json`
+- `--model`: 指定单个模型，可重复传入多次；传入后覆盖内置列表
+- `--models-file`: 从文本文件读取模型列表，支持空行和 `#` 注释
+- `--base-url` / `--api-key`: 显式覆盖 provider 配置
+- `--timeout`: 单模型请求超时，默认 30 秒
+
+示例：
+
+```bash
+python scripts/openai_batch_smoke_test.py --model gpt-5.4 --model qwen3.6-plus
+python scripts/openai_batch_smoke_test.py --models-file /tmp/models.txt --timeout 20
+```
 
 ---
 

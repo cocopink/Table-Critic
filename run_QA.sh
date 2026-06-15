@@ -1,14 +1,14 @@
 # API Configuration
 base_url="${HAOMIAO_URL:-https://113.44.247.131:47851/v1}"
 openai_api_key="${HAOMIAO_AUTHEN_TOKEN:-${HAOMIAO_AUTH_TOKEN:-$ANTHROPIC_AUTH_TOKEN}}"
-model_name='gpt-5.4'
+model_name="${MODEL_NAME:-gpt-5.4}"
 
 first_n=-1
 n_proc=8
 chunk_size=4
 
 # Mode switch: set to "orig" for original mode, "new" for new mode
-MODE="new"
+MODE="${MODE:-new}"
 
 # ============== TableAnalyzer Configuration ==============
 USE_TABLE_ANALYZER="true"  # Set to "false" to skip analysis stage
@@ -29,8 +29,13 @@ ANALYSIS_DATA="${DATA_DIR}/test_analyzed.jsonl"
 ATG_RERANK_DATA="${DATA_DIR}/test_reranked.jsonl"
 ATGO_ROW_DATA="${DATA_DIR}/test_reranked_row.jsonl"
 ATGC_COL_DATA="${DATA_DIR}/test_reranked_col.jsonl"
-THOUGHT_RESULTS="${RESULTS_BASE}/thought/wikitq/${model_name}"
-REFINE_RESULTS="${RESULTS_BASE}/refine/wikitq/${model_name}"
+case "$MODE" in
+    orig) MODE_SUFFIX="_orig" ;;
+    new) MODE_SUFFIX="" ;;
+    *) MODE_SUFFIX="_${MODE}" ;;
+esac
+THOUGHT_RESULTS="${RESULTS_BASE}/thought/wikitq/${model_name}${MODE_SUFFIX}"
+REFINE_RESULTS="${RESULTS_BASE}/refine/wikitq/${model_name}${MODE_SUFFIX}"
 
 # ============== Logging Setup ==============
 LOG_DIR="logs"

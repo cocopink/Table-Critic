@@ -18,6 +18,7 @@ from openai import OpenAI
 import time
 import numpy as np
 import requests
+from urllib.parse import urlparse
 
 
 class LLM:
@@ -33,8 +34,8 @@ class LLM:
 
     @property
     def _is_ollama_qwen(self):
-        """Qwen 模型通过 Ollama 运行时需要走原生 API 来禁用思考模式。"""
-        return self.model_name.startswith('qwen')
+        """仅在 Qwen 且 base_url 端口为 11434 时走原生 API。"""
+        return self.model_name.startswith("qwen") and urlparse(self.base).port == 11434
 
     def _get_ollama_native_url(self):
         """从 OpenAI 兼容 base_url 推导 Ollama 原生 API 地址。
@@ -44,6 +45,13 @@ class LLM:
         if base.endswith('/v1'):
             base = base[:-3]
         return f"{base}/api/chat"
+
+    def _normalize_stop(self, stop):
+        if stop is None:
+            return None
+        if isinstance(stop, list):
+            return stop
+        return [stop]
 
     def _ollama_native_chat(self, messages, options, stop=None):
         """调用 Ollama 原生 /api/chat 端点，传入 think=false。
@@ -188,7 +196,7 @@ class LLM:
                 gpt_responses = client.chat.completions.create(
                     model=self.model_name,
                     messages=messages,
-                    stop=end_str,
+                    stop=self._normalize_stop(end_str),
                     **options
                 )
                 error = None
@@ -265,7 +273,7 @@ class LLM:
                 gpt_responses = client.chat.completions.create(
                     model=self.model_name,
                     messages=messages,
-                    stop=end_str,
+                    stop=self._normalize_stop(end_str),
                     **options
                 )
                 error = None
