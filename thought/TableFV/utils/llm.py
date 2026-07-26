@@ -136,7 +136,10 @@ class LLM:
         # 非 GPT 模型通过 OpenAI 兼容接口时需要 extra_body
         # Qwen3.x models default thinking=ON; disabling it forces reasoning
         # into content, breaking answer extraction.  Keep it for other models.
-        if not self.model_name.startswith(("gpt-", "qwen")):
+        if self.model_name.startswith("qwen"):
+            # vllm: chat_template_kwargs 关 thinking；ollama 原生路径不读 extra_body
+            options['extra_body'] = {"chat_template_kwargs": {"enable_thinking": False}}
+        elif not self.model_name.startswith(("gpt-", "qwen")):
             options['extra_body'] = {"enable_thinking": False}
 
         return options
