@@ -85,7 +85,9 @@ class LLM:
             top_p=1.0,
             max_tokens=max_tokens,
         )
-        if not self.model_name.startswith("gpt-"):
+        # Qwen3.x models default thinking=ON; disabling it forces reasoning
+        # into content, breaking answer extraction.  Keep it for other models.
+        if not self.model_name.startswith(("gpt-", "qwen3.6-plus")):
             options["extra_body"] = {"enable_thinking": False}
 
         messages = [
@@ -130,6 +132,13 @@ class LLM:
         results = []
         for i, choice in enumerate(response.choices):
             text = choice.message.content
+            # Some API backends return content as a list (especially with n>1);
+            # coerce to plain string so downstream extractors never see a list.
+            if isinstance(text, list):
+                text = "\n".join(
+                    part.get("text", str(part)) if isinstance(part, dict) else str(part)
+                    for part in text
+                )
             fake_conf = np.log((len(response.choices) - i) / len(response.choices))
             results.append((text, fake_conf))
 

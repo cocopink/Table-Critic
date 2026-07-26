@@ -4,7 +4,7 @@ openai_api_key="${HAOMIAO_AUTHEN_TOKEN:-${HAOMIAO_AUTH_TOKEN:-$ANTHROPIC_AUTH_TO
 model_name="${MODEL_NAME:-gpt-5.4}"
 
 first_n=-1
-n_proc=8
+n_proc=1
 chunk_size=4
 
 # Mode switch: set to "orig" for original mode, "new" for new mode

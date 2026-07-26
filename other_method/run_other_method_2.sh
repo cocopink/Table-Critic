@@ -3,7 +3,7 @@
 # Run all baseline methods on WikiTQ and TabFact
 # ===========================================================================
 
-MODEL="${MODEL:-qwen3.6-plus}" # glm-5.1
+MODEL="${MODEL:-glm-5.1}" # glm-5.1
 BASE_URL="${BASE_URL:-https://113.44.247.131:47851/v1}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-$ANTHROPIC_AUTH_TOKEN}"
 N_PROC="${N_PROC:-1}"
@@ -25,25 +25,25 @@ echo "============================================"
 echo ""
 echo "========== TabFact =========="
 
-# for METHOD in e2e; do #  e2e few_shot cot cot_consist;
-#     echo ""
-#     echo "--- TabFact / $METHOD ---"
-#     python "$SCRIPT" \
-#         --dataset tabfact \
-#         --method "$METHOD" \
-#         --model "$MODEL" \
-#         --base_url "$BASE_URL" \
-#         --api_key "$OPENAI_API_KEY" \
-#         --first_n "$FIRST_N" \
-#         --n_proc "$N_PROC" \
-#         --n_sample "$COT_CONSIST_N"
-# done
+for METHOD in   cot cot_consist; do # 
+    echo ""
+    echo "--- TabFact / $METHOD ---"
+    python "$SCRIPT" \
+        --dataset tabfact \
+        --method "$METHOD" \
+        --model "$MODEL" \
+        --base_url "$BASE_URL" \
+        --api_key "$OPENAI_API_KEY" \
+        --first_n "$FIRST_N" \
+        --n_proc "$N_PROC" \
+        --n_sample "$COT_CONSIST_N"
+done
 
 # ---- WikiTQ ----
 echo ""
 echo "========== WikiTQ =========="
 
-for METHOD in e2e cot_consist; do # e2e few_shot cot cot_consist;
+for METHOD in e2e few_shot cot cot_consist; do # e2e few_shot cot 
     echo ""
     echo "--- WikiTQ / $METHOD ---"
     python "$SCRIPT" \

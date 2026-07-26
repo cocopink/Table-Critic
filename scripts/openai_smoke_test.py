@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass
 from typing import Mapping
 
-DEFAULT_MODEL = "gpt-5.4"
+DEFAULT_MODEL = "glm-5.1"
 DEFAULT_PROMPT = "hello"
 DEFAULT_TIMEOUT = 30.0
 

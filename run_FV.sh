@@ -5,7 +5,7 @@ model_name="${MODEL_NAME:-gpt-5.4}"
 
 first_n=-1
 n_proc=1
-chunk_size=1
+chunk_size=4
 
 # Mode switch: set to "orig" for original mode, "new" for new mode
 MODE="${MODE:-new}"

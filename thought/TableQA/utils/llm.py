@@ -118,10 +118,10 @@ class LLM:
             max_tokens=per_example_max_decode_steps,
         )
 
-        # 只有非GPT模型才添加enable_thinking参数
-        # GPT模型不支持这个参数，但Qwen等模型需要
-        if not self.model_name.startswith('gpt-'):
-            options['extra_body'] = {"enable_thinking": False}  # 显式关闭思考模式
+        # Qwen3.x models default thinking=ON; disabling it forces reasoning
+        # into content, breaking answer extraction.  Keep it for other models.
+        if not self.model_name.startswith(("gpt-", "qwen")):
+            options['extra_body'] = {"enable_thinking": False}
 
         return options
 

@@ -21,7 +21,7 @@ from scripts.openai_batch_smoke_test import resolve_runtime_config
 from scripts.openai_smoke_test import RuntimeConfig, mask_secret, run_smoke_test, validate_runtime_config
 
 
-DEFAULT_LOGICAL_MODELS = ["qwen3.6-plus"]
+DEFAULT_LOGICAL_MODELS = ["glm-5.1"] # "qwen3.6-plus",
 GPT54_FALLBACKS = [
     "gpt-5.4",
     "gpt-5.4-high",

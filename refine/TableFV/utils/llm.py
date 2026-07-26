@@ -134,9 +134,9 @@ class LLM:
         )
 
         # 非 GPT 模型通过 OpenAI 兼容接口时需要 extra_body
-        # Qwen 模型实际走 Ollama 原生 API（_ollama_native_chat），
-        # 此 extra_body 对 Qwen 无效但也不会报错，保持兼容
-        if not self.model_name.startswith('gpt-'):
+        # Qwen3.x models default thinking=ON; disabling it forces reasoning
+        # into content, breaking answer extraction.  Keep it for other models.
+        if not self.model_name.startswith(("gpt-", "qwen")):
             options['extra_body'] = {"enable_thinking": False}
 
         return options
