@@ -11,7 +11,7 @@
 #   - R005: 路径全维度隔离（本脚本路径含 model/variant/gamma/thinking/memory）
 #
 # 用法:
-#   bash run_experiments.sh --stage smoke  [--model 4b|9b|2b] [--dataset wikitq|tabfact|both] [--variant baseline|p1|p2|p1p2|all]
+#   bash run_experiments.sh --stage smoke  [--model 0.8b|2b|4b|9b] [--dataset wikitq|tabfact|both] [--variant baseline|p1|p2|p1p2|all]
 #   bash run_experiments.sh --stage pilot  --model 4b --dataset wikitq --variant all
 #   bash run_experiments.sh --stage full   --model 4b --dataset wikitq --variant p1p2
 #
@@ -32,7 +32,7 @@ THINKING="nothinking"          # ollama 原生路径自动 think:False（_is_oll
 MEMORY="frozen"                # frozen_memory=True，禁止 UPDATE_TREE 写回
 
 STAGE=""
-MODEL=""
+MODEL="Qwen3.5-4B"
 DATASET=""
 VARIANT=""
 
@@ -70,20 +70,22 @@ case "$BACKEND" in
         [[ -z "$OLLAMA_URL" ]] && OLLAMA_URL="http://localhost:11434/v1"
         [[ -z "${N_PROC:-}" ]] && N_PROC=1
         case "$MODEL" in
+            0.8b) MODEL_NAME="qwen3.5:0.8b" ;;
             2b) MODEL_NAME="qwen3.5:2b" ;;
             4b) MODEL_NAME="qwen3.5:4b" ;;
             9b) MODEL_NAME="qwen3.5:9b" ;;
-            *) echo "Error: --model must be 2b|4b|9b" >&2; exit 2 ;;
+            *) echo "Error: --model must be 0.8b|2b|4b|9b" >&2; exit 2 ;;
         esac
         ;;
     vllm)
         [[ -z "$OLLAMA_URL" ]] && OLLAMA_URL="http://localhost:8000/v1"
         [[ -z "${N_PROC:-}" ]] && N_PROC=4
         case "$MODEL" in
+            0.8b) MODEL_NAME="Qwen/Qwen3.5-0.8B" ;;
             2b) MODEL_NAME="Qwen/Qwen3.5-2B" ;;
             4b) MODEL_NAME="Qwen/Qwen3.5-4B" ;;
             9b) MODEL_NAME="Qwen/Qwen3.5-9B" ;;
-            *) echo "Error: --model must be 2b|4b|9b" >&2; exit 2 ;;
+            *) echo "Error: --model must be 0.8b|2b|4b|9b" >&2; exit 2 ;;
         esac
         ;;
     *) echo "Error: --backend must be ollama|vllm" >&2; exit 2 ;;

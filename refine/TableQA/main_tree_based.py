@@ -28,7 +28,7 @@ def _resolve_openai_api_key(openai_api_key):
 def _refine_one_sample_mp_core(arg):
     """Worker function for multiprocessing refinement of a single sample."""
     (llm, sample, sample_idx, llm_options, cache_dir,
-     use_clarifier, thought_results_dir, max_iterations,
+     use_clarifier, thought_results_dir, max_iterations, frozen_memory,
      use_verifier, use_diff_critic, diff_critic_mode, router_variant) = arg
     try:
         refined = controller_main_loop(
@@ -36,6 +36,7 @@ def _refine_one_sample_mp_core(arg):
             max_iterations=max_iterations, cache_dir=cache_dir,
             sample_idx=sample_idx, use_clarifier=use_clarifier,
             thought_results_dir=thought_results_dir,
+            frozen_memory=frozen_memory,
             use_verifier=use_verifier,
             use_diff_critic=use_diff_critic,
             diff_critic_mode=diff_critic_mode,
@@ -57,6 +58,7 @@ def main(
     n_proc=1,
     chunk_size=1,
     use_clarifier: bool = True,
+    frozen_memory: bool = False,
     use_verifier: bool = False,
     use_diff_critic: bool = False,
     diff_critic_mode: str = "diagnose_only",
@@ -96,6 +98,7 @@ def main(
     # Use controller-based refinement
     print("Using controller-based refinement...")
     print(f"Clarifier enabled: {use_clarifier}")
+    print(f"Frozen memory enabled: {frozen_memory}")
     print(f"Verifier enabled: {use_verifier}")
     print(f"Diff-Critic enabled: {use_diff_critic} (mode: {diff_critic_mode})")
     print(f"Router variant: {router_variant or 'none (standard FULL)'}")
@@ -120,7 +123,7 @@ def main(
         # Multiprocessing mode: mp.Pool + imap_unordered
         args_list = [
             (gpt_llm, sample, idx, llm_options, cache_dir,
-             use_clarifier, thought_results_dir, 2,
+             use_clarifier, thought_results_dir, 2, frozen_memory,
              use_verifier, use_diff_critic, diff_critic_mode,
              router_variant or None)
             for idx, sample in valid_entries if sample is not None
@@ -150,6 +153,7 @@ def main(
                 sample_idx=idx,
                 use_clarifier=use_clarifier,
                 thought_results_dir=thought_results_dir,
+                frozen_memory=frozen_memory,
                 use_verifier=use_verifier,
                 router_variant=router_variant or None,
                 use_diff_critic=use_diff_critic,

@@ -1027,24 +1027,28 @@ class ActionExecutor:
             state.sample = refine_sample
         
         elif action == ControllerAction.UPDATE_TREE:
-            from critic.TableFV.tools import update_error_tree
-            # 调试信息
-            print(f"[DEBUG UPDATE_TREE] error_route: {state.error_route}")
-            print(f"[DEBUG UPDATE_TREE] sample keys: {list(state.sample.keys())}")
-            print(f"[DEBUG UPDATE_TREE] critique exists: {'critique' in state.sample}")
-            print(f"[DEBUG UPDATE_TREE] conclusion: {state.sample.get('conclusion', 'N/A')}")
-            
-            # 使用 nullcontext() 替代 lock=None，支持上下文管理器协议
-            update_error_tree(
-                state.sample,
-                state.error_route or "random",
-                error_tree_json=CRITIC_TREE_JSON,
-                llm=self.llm,
-                llm_options=self.llm_options,
-                lock=nullcontext(),
-                use_blueprint=True
-            )
-            print(f"[DEBUG UPDATE_TREE] Finished update_error_tree call")
+            if frozen_memory:
+                if DEBUG:
+                    print("[DEBUG UPDATE_TREE] frozen_memory=True, skip update_error_tree")
+            else:
+                from critic.TableFV.tools import update_error_tree
+                # 调试信息
+                print(f"[DEBUG UPDATE_TREE] error_route: {state.error_route}")
+                print(f"[DEBUG UPDATE_TREE] sample keys: {list(state.sample.keys())}")
+                print(f"[DEBUG UPDATE_TREE] critique exists: {'critique' in state.sample}")
+                print(f"[DEBUG UPDATE_TREE] conclusion: {state.sample.get('conclusion', 'N/A')}")
+                
+                # 使用 nullcontext() 替代 lock=None，支持上下文管理器协议
+                update_error_tree(
+                    state.sample,
+                    state.error_route or "random",
+                    error_tree_json=CRITIC_TREE_JSON,
+                    llm=self.llm,
+                    llm_options=self.llm_options,
+                    lock=nullcontext(),
+                    use_blueprint=True
+                )
+                print(f"[DEBUG UPDATE_TREE] Finished update_error_tree call")
         
         # 更新状态
         state.iteration += 1
@@ -1133,6 +1137,7 @@ def controller_main_loop(
     sample_idx: Optional[int] = None,
     use_clarifier: bool = True,
     thought_results_dir: Optional[str] = None,
+    frozen_memory: bool = False,
 ) -> Dict[str, Any]:
     """
     Controller 主循环（集成 Clarifier）
@@ -1399,6 +1404,7 @@ def run_with_controller(
         cache_dir: 缓存目录路径（可选）
         sample_idx: 样本索引（用于缓存文件名）
         thought_results_dir: Thought 阶段的结果目录路径（用于读取 clarifier 信息）
+        frozen_memory: 是否冻结测试期错误树写回
         
     Returns:
         Dict[str, Any]: 处理后的样本

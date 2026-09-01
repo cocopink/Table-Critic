@@ -27,13 +27,14 @@ def _resolve_openai_api_key(openai_api_key):
 def _refine_one_sample_mp_core(arg):
     """Worker function for multiprocessing refinement of a single sample."""
     (llm, sample, sample_idx, llm_options, cache_dir,
-     use_clarifier, thought_results_dir, max_iterations) = arg
+     use_clarifier, thought_results_dir, max_iterations, frozen_memory) = arg
     try:
         refined = controller_main_loop(
             sample, llm=llm, llm_options=llm_options,
             max_iterations=max_iterations, cache_dir=cache_dir,
             sample_idx=sample_idx, use_clarifier=use_clarifier,
             thought_results_dir=thought_results_dir,
+            frozen_memory=frozen_memory,
         )
         return sample_idx, refined
     except Exception as e:
@@ -51,6 +52,7 @@ def main(
     n_proc=1,
     chunk_size=1,
     use_clarifier: bool = True,
+    frozen_memory: bool = False,
 ):
     openai_api_key = _resolve_openai_api_key(openai_api_key)
 
@@ -86,6 +88,7 @@ def main(
     # Use controller-based refinement
     print("Using controller-based refinement...")
     print(f"Clarifier enabled: {use_clarifier}")
+    print(f"Frozen memory enabled: {frozen_memory}")
     print(f"Concurrency: n_proc={n_proc}, chunk_size={chunk_size}")
 
     llm_options = gpt_llm.get_model_options(
@@ -98,7 +101,7 @@ def main(
         # Multiprocessing mode: mp.Pool + imap_unordered
         args_list = [
             (gpt_llm, sample, idx, llm_options, cache_dir,
-             use_clarifier, thought_results_dir, 2)
+             use_clarifier, thought_results_dir, 2, frozen_memory)
             for idx, sample in enumerate(all_samples) if sample is not None
         ]
 
@@ -127,6 +130,7 @@ def main(
                 sample_idx=idx,
                 use_clarifier=use_clarifier,
                 thought_results_dir=thought_results_dir,
+                frozen_memory=frozen_memory,
             )
             refined_samples[idx] = refined_sample
 
